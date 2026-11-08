@@ -1,0 +1,270 @@
+# =============================================================================
+# Pouch — Android APK release pipeline
+# =============================================================================
+#
+# Builds a standalone, installable Android APK on a GitHub-hosted runner and
+# attaches it to the GitHub Release for the pushed version tag.
+#
+# Design notes
+# ------------
+# * **No EAS / Expo account.** The binary is produced entirely locally by
+#   `expo prebuild` (Continuous Native Generation) + Gradle, so there is no
+#   cloud login, no `EXPO_TOKEN`, and no paid tier involved anywhere in this
+#   file. The workflow needs no repository secrets at all.
+#
+# * **`android/` is never committed** (see .gitignore). It is regenerated
+#   from `app.json` and the config plugins on every run, so the native
+#   project can never drift away from the JS configuration.
+#
+# * **Signing.** `expo prebuild` emits `signingConfig signingConfigs.debug`
+#   for the `release` build type, so the APK comes out of Gradle already
+#   signed and installable — with zero secrets. See the "Signing" section at
+#   the bottom of this file before you ship to the Play Store.
+#
+# Triggering
+# ----------
+#   git tag v1.0.0 && git push origin v1.0.0   -> build + publish a Release
+#   Actions tab > Build Android APK > Run workflow
+#                                            -> build + download an artifact
+#
+# =============================================================================
+
+name: Build Android APK
+
+# ---------------------------------------------------------------------------
+# Triggers
+# ---------------------------------------------------------------------------
+on:
+  # Any tag starting with "v": v1.0.0, v1.0.1, v2.0.0-rc.1, ...
+  push:
+    tags:
+      - 'v*'
+
+  # Manual runs from the Actions tab. A manual run normally starts from a
+  # branch rather than a tag, so it cannot hang a Release on anything —
+  # that is why the final two steps are gated on `github.ref_type`.
+  workflow_dispatch:
+
+# `softprops/action-gh-release` creates the Release through the GitHub API,
+# which requires write access to repository contents. Newer repositories
+# default the GITHUB_TOKEN to read-only, so this must be stated explicitly
+# or the release step fails with "Resource not accessible by integration".
+permissions:
+  contents: write
+
+# Never spend two runners on the same ref: re-triggering a run cancels the
+# one already in flight.
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build release APK
+
+    # GitHub's Ubuntu image ships a preinstalled Android SDK; the explicit
+    # setup step below pins and licences the toolchain we actually rely on.
+    runs-on: ubuntu-latest
+
+    # Cold-cache runs spend most of their time downloading Gradle, AGP and
+    # Maven dependencies. 60 minutes is headroom, not the expected duration.
+    timeout-minutes: 60
+
+    steps:
+      # ---------------------------------------------------------------------
+      # 1. Source
+      # ---------------------------------------------------------------------
+      # Default shallow clone is enough: nothing here reads history, and the
+      # auto-generated release notes are produced server-side by the API.
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # ---------------------------------------------------------------------
+      # 2. Toolchain
+      # ---------------------------------------------------------------------
+      # Node 22 (LTS) is the lowest line that satisfies Expo SDK 58's engines
+      # field — `^22.13.0 || ^24.3.0 || ^26.0.0 || >=27.0.0`. Node 20 is
+      # end-of-life and fails that check, producing EBADENGINE on every
+      # `npm ci`. `cache: npm` restores ~/.npm keyed on package-lock.json so
+      # warm runs skip the tarball download entirely.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # JDK 17 is the floor the generated Gradle 9.4.1 / Android Gradle
+      # Plugin toolchain accepts, and is the version Expo's local
+      # production guide documents. Temurin is the distribution it points at.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Installs the Android command-line tools and — critically — accepts
+      # the SDK licences, so AGP can download any platform or build-tools
+      # revision the runner image does not already have. Without this a
+      # cold build can fail with "license not accepted".
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          packages: platform-tools
+
+      # Caches ~/.gradle (dependency jars + the Gradle distribution) between
+      # runs. The wrapper itself lives inside the generated `android/`
+      # folder, so without this every single run re-downloads Gradle.
+      - name: Set up Gradle caching
+        uses: gradle/actions/setup-gradle@v6
+
+      # ---------------------------------------------------------------------
+      # 3. JavaScript dependencies
+      # ---------------------------------------------------------------------
+      # `npm ci` rather than `npm install`: it wipes node_modules, installs
+      # strictly from package-lock.json, and fails if the lockfile has
+      # drifted from package.json — exactly the reproducibility a release
+      # build needs.
+      - name: Install dependencies
+        run: npm ci
+
+      # ---------------------------------------------------------------------
+      # 4. Guards
+      # ---------------------------------------------------------------------
+      # Metro transpiles but does NOT type-check, so a build can report
+      # success while shipping type errors straight into the binary. This
+      # gate costs a few seconds and closes that hole.
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      # Android's `versionName` is read from app.json -> expo.version, so
+      # tagging v1.1.0 while app.json still says 1.0.0 would ship an APK
+      # that reports the wrong version. Emit a workflow annotation rather
+      # than failing, so a hotfix tag is never held hostage — but make the
+      # mismatch impossible to overlook in the run summary.
+      - name: Compare tag with app.json version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          app_version="$(node -p "require('./app.json').expo.version")"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          if [ "$app_version" = "$tag_version" ]; then
+            echo "OK: tag ${GITHUB_REF_NAME} matches app.json version ${app_version}."
+          else
+            echo "::warning title=Version mismatch::Tag ${GITHUB_REF_NAME} does not match app.json version ${app_version}. The built APK will report ${app_version}."
+          fi
+
+      # ---------------------------------------------------------------------
+      # 5. Native project + binary
+      # ---------------------------------------------------------------------
+      # Continuous Native Generation: `android/` is absent from the repo, so
+      # generate it from app.json + config plugins on this runner.
+      #   --no-install   dependencies were already installed by `npm ci`
+      #   -p android     skip iOS so no macOS runner is needed
+      - name: Generate native Android project
+        run: npx expo prebuild -p android --no-install
+
+      # `assembleRelease` yields an APK, which is what GitHub Releases
+      # should distribute. (`bundleRelease` yields the .aab that Google Play
+      # requires — different target, different destination.)
+      #
+      # `working-directory: android` puts the Gradle wrapper on the path;
+      # `--no-daemon` avoids a background process holding onto the cache.
+      - name: Build release APK
+        shell: bash
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      # Gradle always writes this exact filename for the release variant.
+      # Fail loudly with a directory listing if that ever changes, instead
+      # of letting an empty Release go out.
+      - name: Collect APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          src="android/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$src" ]; then
+            echo "::error title=APK missing::Expected ${src} but it does not exist."
+            find android/app/build/outputs -type f -print 2>/dev/null || true
+            exit 1
+          fi
+
+          # Give the asset a recognisable name in the release listing.
+          # Branch names may contain '/', which is illegal in a filename,
+          # so neutralise the characters GitHub allows in refs but files do
+          # not. Tags like `v1.0.0` pass through untouched.
+          safe_ref="$(printf '%s' "$GITHUB_REF_NAME" | tr '/: ' '---')"
+          dest="pouch-${safe_ref}.apk"
+
+          cp "$src" "$dest"
+          echo "path=${dest}" >> "$GITHUB_OUTPUT"
+          ls -lh "$dest"
+
+      # ---------------------------------------------------------------------
+      # 6. Delivery
+      # ---------------------------------------------------------------------
+      # Manual runs start from a branch, so there is no tag to attach a
+      # Release to. Hand the APK back as a workflow artifact instead, so a
+      # `workflow_dispatch` run still produces something downloadable.
+      - name: Upload APK as workflow artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pouch-android-apk
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      # Tagged runs get a published GitHub Release with the APK attached.
+      #
+      #   fail_on_unmatched_files  a vanished APK fails this run rather than
+      #                            publishing a Release with no binary
+      #   generate_release_notes   GitHub drafts the notes from everything
+      #                            since the previous tag; the APK shows up
+      #                            as a downloadable asset beneath them
+      #
+      # `tag_name` is intentionally omitted: the action defaults it to
+      # github.ref_name, which is the tag that triggered the run.
+      - name: Create GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ steps.apk.outputs.path }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+
+# =============================================================================
+# Signing
+# =============================================================================
+# What you have now: the APK is signed with the *debug* keystore that
+# `expo prebuild` generates at android/app/debug.keystore, because Expo's
+# template sets `signingConfig signingConfigs.debug` on the `release` build
+# type. That is deliberate here — it makes the binary installable on any
+# device with no secrets in the repository, which is what an open-source
+# GitHub Release needs.
+#
+# It is NOT good enough for Google Play: Play requires a consistent upload
+# key, and an app cannot be re-signed later without breaking upgrades for
+# everyone who already installed it. Before publishing to the Play Store:
+#
+#   1. Generate a keystore once, offline, and keep it somewhere safe:
+#        keytool -genkey -v -keystore upload-keystore.jks \
+#          -alias upload -keyalg RSA -keysize 2048 -validity 10000
+#
+#   2. Base64-encode it and store it as a repository secret:
+#        base64 -w0 upload-keystore.jks   # macOS: base64 -i upload-keystore.jks
+#        -> Settings > Secrets and variables > Actions > NEW > ANDROID_KEYSTORE
+#      Add ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and
+#      ANDROID_KEY_PASSWORD alongside it.
+#
+#   3. Decode it after the prebuild step and append the four
+#      MYAPP_UPLOAD_* properties to android/gradle.properties, then swap
+#      `signingConfig signingConfigs.debug` for `signingConfigs.release`
+#      (or wire it up with a config plugin so the change lives in app.json
+#      instead of in this workflow).
+#
+# Until then, treat every published APK as a debug-signed preview build.
+# =============================================================================
