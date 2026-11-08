@@ -5,6 +5,12 @@
 <h1 align="center">Pouch</h1>
 
 <p align="center">
+  <a href="https://github.com/mysteries-dev/pouch/releases/latest/download/pouch-v1.0.0.apk"><img src="https://img.shields.io/badge/Download-Latest_Pouch_APK-success?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
+  <a href="https://github.com/mysteries-dev/pouch/actions"><img src="https://img.shields.io/github/actions/workflow/status/mysteries-dev/pouch/build-apk.yml?branch=main&style=for-the-badge&logo=github" alt="Build Status" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/mysteries-dev/pouch?style=for-the-badge&color=blue" alt="License: MIT" /></a>
+</p>
+
+<p align="center">
   <b>Offline-first money tracking for students.</b><br />
   Log an expense in three seconds, split it with your roommates, and audit the month — no budget templates, no cloud account.
 </p>
