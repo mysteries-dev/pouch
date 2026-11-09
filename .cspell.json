@@ -1,0 +1,18 @@
+{
+  "version": "0.2",
+  "words": [
+    // --- Tech & Build ---
+    "prebuild",
+    "gradlew",
+    "sideload",
+    "mojibake",
+    "expo",
+    "zustand",
+    "sqlite",
+
+    // --- Domain & Locale ---
+    "Bangla",
+    "Pouch",
+    "Relocation"
+  ]
+}
