@@ -26,6 +26,7 @@ import {
   View,
 } from 'react-native';
 import type { TextInputInstance } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { TransactionType } from '../db/schema';
 import { useFinanceStore } from '../store/useFinanceStore';
@@ -71,6 +72,11 @@ export default function FastLoggerModal({
 }: FastLoggerModalProps) {
   // The store action persists to SQLite and updates Zustand state itself.
   const addTransaction = useFinanceStore((state) => state.addTransaction);
+
+  // Bottom inset so the sheet's action row never sits under the system
+  // navigation area — the same pattern SummaryScreen uses for its scroll
+  // content (see `paddingBottom: insets.bottom + 96` there).
+  const insets = useSafeAreaInsets();
 
   const [type, setType] = useState<TransactionType>(initialType);
   const [amount, setAmount] = useState('');
@@ -145,10 +151,13 @@ export default function FastLoggerModal({
         />
 
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.sheetWrap}
+          pointerEvents="box-none"
         >
-          <View style={styles.sheet}>
+          <View
+            style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}
+          >
             <View style={styles.sheetHeader}>
               <View style={styles.handle} />
               <Pressable
@@ -315,7 +324,6 @@ export default function FastLoggerModal({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    justifyContent: 'flex-end',
   },
   backdrop: {
     // Full-bleed scrim behind the sheet (explicit props: `absoluteFillObject`
@@ -327,15 +335,20 @@ const styles = StyleSheet.create({
     left: 0,
     backgroundColor: colors.backdrop,
   },
+  // Full-screen column that pins the sheet to its bottom edge. `behavior`
+  // then shrinks this wrapper by the keyboard height, so the sheet lifts as
+  // a whole instead of being squashed — and `box-none` keeps taps in the
+  // empty area reaching the backdrop behind.
   sheetWrap: {
+    flex: 1,
     width: '100%',
+    justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
     paddingTop: spacing.sm,
     maxHeight: '88%',
   },
