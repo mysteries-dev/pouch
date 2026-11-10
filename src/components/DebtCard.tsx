@@ -20,8 +20,9 @@ export interface DebtCardProps {
 }
 
 export default function DebtCard({ debt }: DebtCardProps) {
-  // Store action: persists the settlement and updates `debts` /
-  // `activeDebts` / `netRoommateBalance` in the same tick.
+  // Store action: persists the settlement plus the repayment movement it
+  // triggers, and updates `debts` / `activeDebts` / the direction totals
+  // / money totals in the same tick.
   const settleDebt = useFinanceStore((state) => state.settleDebt);
 
   const isOpen = debt.status === 'open';

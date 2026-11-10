@@ -2,8 +2,10 @@
  * Pouch — Debts Screen ("I Owe / They Owe").
  *
  * The roommate & shared-debt tracker:
- *  - a net balance banner driven by `netRoommateBalance`, so every add or
- *    settle updates it in the same tick as the list,
+ *  - two independent totals — money lent out ("They owe you") and money
+ *    borrowed ("I owe") — summed per direction and never netted across
+ *    people, so every add or settle updates them in the same tick as the
+ *    list,
  *  - an All / I Owe / They Owe Me segmented filter,
  *  - a switch to reveal settled debts,
  *  - a scrollable list of `DebtCard`s and a floating **+ Add Debt** button.
@@ -27,7 +29,7 @@ import AddDebtModal from '../components/AddDebtModal';
 import DebtCard from '../components/DebtCard';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { colors, radius, spacing } from '../theme';
-import { formatNetBalanceLine } from '../utils/format';
+import { formatMoney } from '../utils/format';
 
 /** List filter: everything, only what you owe, only what is owed to you. */
 type DebtFilter = 'all' | 'you_owe' | 'owed_to_you';
@@ -39,12 +41,11 @@ const FILTERS: { key: DebtFilter; label: string }[] = [
 ];
 
 export default function DebtsScreen() {
-  // Store selectors: the banner and list are derived from the same state.
+  // Store selectors: the totals and list derive from the same state.
   const debts = useFinanceStore((state) => state.debts);
   const activeDebts = useFinanceStore((state) => state.activeDebts);
-  const netRoommateBalance = useFinanceStore(
-    (state) => state.netRoommateBalance,
-  );
+  const totalLentOut = useFinanceStore((state) => state.totalLentOut);
+  const totalBorrowed = useFinanceStore((state) => state.totalBorrowed);
 
   const [filter, setFilter] = useState<DebtFilter>('all');
   const [showSettled, setShowSettled] = useState(false);
@@ -94,19 +95,38 @@ export default function DebtsScreen() {
         <Text style={styles.tagline}>Roommate & shared IOUs.</Text>
       </View>
 
-      {/* Net roommate balance banner — recomputes on every debt mutation. */}
+      {/* Independent IOU totals — lent and borrowed are never netted
+          against each other or across people. */}
       <View style={styles.banner}>
-        <Text style={styles.bannerLabel}>Net Roommate Balance</Text>
-        <Text
-          style={[
-            styles.bannerValue,
-            netRoommateBalance > 0 && styles.bannerValuePositive,
-            netRoommateBalance < 0 && styles.bannerValueNegative,
-          ]}
-          accessibilityLabel={`Net roommate balance: ${formatNetBalanceLine(netRoommateBalance)}`}
-        >
-          {formatNetBalanceLine(netRoommateBalance)}
-        </Text>
+        <View style={styles.bannerColumns}>
+          <View style={styles.bannerColumn}>
+            <Text style={styles.bannerLabel}>They owe you</Text>
+            <Text
+              style={[styles.bannerValue, styles.bannerValuePositive]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              accessibilityLabel={`They owe you ${formatMoney(totalLentOut)}`}
+            >
+              {formatMoney(totalLentOut)}
+            </Text>
+          </View>
+
+          <View style={styles.bannerDivider} />
+
+          <View style={styles.bannerColumn}>
+            <Text style={styles.bannerLabel}>I owe</Text>
+            <Text
+              style={[styles.bannerValue, styles.bannerValueNegative]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+              accessibilityLabel={`I owe ${formatMoney(totalBorrowed)}`}
+            >
+              {formatMoney(totalBorrowed)}
+            </Text>
+          </View>
+        </View>
         <Text style={styles.bannerMeta}>
           {activeDebts.length} open {activeDebts.length === 1 ? 'debt' : 'debts'}
         </Text>
@@ -217,6 +237,19 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.lg,
+  },
+  // Two side-by-side columns, split by a hairline — one per direction.
+  bannerColumns: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
+  bannerColumn: {
+    flex: 1,
+    paddingHorizontal: spacing.xs,
+  },
+  bannerDivider: {
+    width: 1,
+    backgroundColor: colors.border,
   },
   bannerLabel: {
     fontSize: 12,

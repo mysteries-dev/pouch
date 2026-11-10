@@ -177,22 +177,23 @@ export async function addDebt(
 }
 
 /**
- * Records a debt together with the cash movement it causes, atomically.
+ * Records a debt, together with the cash movement it causes, atomically.
  *
- * Both directions leave the student's available balance: lending hands
- * real cash over, and borrowed money is committed to repayment rather
- * than free to spend. The movement is persisted as an `expense` ledger
- * entry — so `netBalance` (`income - expenses`) reflects it immediately
- * — while the debt row itself remains the receivable (`owed_to_you`) or
- * the liability (`you_owe`).
+ * LENDING (`owed_to_you`) hands real cash over, so an `expense` ledger
+ * entry (`Lending` / "Lent to X") is written alongside the debt and
+ * `netBalance` drops immediately. BORROWING (`you_owe`) creates only the
+ * liability — nothing crosses the wallet yet, so the balance is untouched
+ * at creation; the money leaves when the student taps **Settle Up** (see
+ * {@link settleDebtWithMovement}).
  *
- * Runs both inserts in a single SQLite transaction: either the debt and
- * its movement both land, or neither does.
+ * Runs the writes in a single SQLite transaction: either everything
+ * lands, or nothing does.
  *
  * @param personName Non-empty name of the counterparty.
  * @param amount     Positive money magnitude (rounded to 2 decimals).
  * @param type       `'owed_to_you'` or `'you_owe'`.
- * @returns The persisted debt and the matching expense transaction.
+ * @returns The persisted debt plus the lending expense, or `null` for
+ *          the movement when nothing crossed the wallet yet (borrowing).
  * @throws If validation fails or the insert cannot be read back; the
  *         transaction is rolled back, leaving no partial records.
  */
@@ -200,27 +201,79 @@ export async function addDebtWithMovement(
   personName: string,
   amount: number,
   type: DebtType,
-): Promise<{ debt: Debt; movement: Transaction }> {
-  const lent = type === 'owed_to_you';
+): Promise<{ debt: Debt; movement: Transaction | null }> {
+  const lentOut = type === 'owed_to_you';
   const counterparty = personName.trim();
 
   let debt: Debt | undefined;
-  let movement: Transaction | undefined;
+  let movement: Transaction | null = null;
 
   const db = await getDatabase();
   await db.withTransactionAsync(async () => {
     debt = await addDebt(personName, amount, type);
+    // Borrowing books no movement at creation — only lending moves cash.
+    if (lentOut) {
+      movement = await addTransaction(
+        amount,
+        'expense',
+        'Lending',
+        undefined,
+        `Lent to ${counterparty}`,
+      );
+    }
+  });
+
+  if (!debt) {
+    throw new Error('Debt transaction did not complete.');
+  }
+  return { debt, movement };
+}
+
+/**
+ * Settles a debt together with the repayment it triggers, atomically.
+ *
+ * This is the moment money moves for an IOU, in the student's favour or
+ * against it:
+ *  - `owed_to_you` — they pay you back: an `income` entry ("X repaid
+ *    you") credits `netBalance` with the cash lent out at creation.
+ *  - `you_owe` — you pay them back: an `expense` entry ("You repaid X")
+ *    debits `netBalance` — the first and only time borrowing touches the
+ *    balance.
+ *
+ * The `status = 'open'` gate from {@link settleDebt} still guards the
+ * write, so a double-tap (or an unknown id) writes no second movement.
+ *
+ * @returns The settled debt with its movement, or `null` if the debt did
+ *          not exist or was already settled — nothing is written then.
+ * @throws If the movement insert fails; the whole transaction rolls
+ *         back, leaving the debt open and the balance untouched.
+ */
+export async function settleDebtWithMovement(
+  debtId: number,
+): Promise<{ debt: Debt; movement: Transaction } | null> {
+  let debt: Debt | null = null;
+  let movement: Transaction | null = null;
+
+  const db = await getDatabase();
+  await db.withTransactionAsync(async () => {
+    const settled = await settleDebt(debtId);
+    if (!settled) return;
+
+    const repaid = settled.type === 'owed_to_you';
     movement = await addTransaction(
-      amount,
-      'expense',
-      lent ? 'Lending' : 'Borrowing',
+      settled.amount,
+      repaid ? 'income' : 'expense',
+      'Repayment',
       undefined,
-      lent ? `Lent to ${counterparty}` : `Borrowed from ${counterparty}`,
+      repaid
+        ? `${settled.personName} repaid you`
+        : `You repaid ${settled.personName}`,
     );
+    debt = settled;
   });
 
   if (!debt || !movement) {
-    throw new Error('Debt transaction did not complete.');
+    return null;
   }
   return { debt, movement };
 }

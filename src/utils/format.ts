@@ -117,20 +117,6 @@ export function formatDateLong(iso: string): string {
 }
 
 /**
- * Human line for a signed net balance, always phrased from the student's
- * point of view: `All settled up 🎉`, `You owe Tk 1,200.00` or
- * `They owe you Tk 1,200.00`.
- *
- * Shared by the Debts banner and the Summary roll-forward card so the two
- * screens can never describe the same balance differently.
- */
-export function formatNetBalanceLine(net: number): string {
-  if (net === 0) return 'All settled up 🎉';
-  const magnitude = formatMoney(Math.abs(net));
-  return net < 0 ? `You owe ${magnitude}` : `They owe you ${magnitude}`;
-}
-
-/**
  * Keeps only digits and a single decimal point with at most 2 decimals, so
  * an amount field stays valid no matter what the keypad produces. A trailing
  * `.` is preserved while the user is still typing.

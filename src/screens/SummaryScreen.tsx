@@ -35,7 +35,6 @@ import { useFinanceStore } from '../store/useFinanceStore';
 import { colors, radius, spacing } from '../theme';
 import {
   formatMoney,
-  formatNetBalanceLine,
   isSameMonth,
   roundMoney,
 } from '../utils/format';
@@ -79,9 +78,9 @@ export default function SummaryScreen() {
   // so all three tabs describe one identical dataset.
   const transactions = useFinanceStore((state) => state.transactions);
   const activeDebts = useFinanceStore((state) => state.activeDebts);
-  const netRoommateBalance = useFinanceStore(
-    (state) => state.netRoommateBalance,
-  );
+  // Independent direction totals — one line each, never netted.
+  const totalLentOut = useFinanceStore((state) => state.totalLentOut);
+  const totalBorrowed = useFinanceStore((state) => state.totalBorrowed);
 
   // Offset in whole months from the current one: `0` is this month, `-1`
   // is last month. Staying at or below zero is what caps the selector at
@@ -278,20 +277,27 @@ export default function SummaryScreen() {
           <Text style={styles.cardSubtitle}>Unresolved roommate balances</Text>
 
           {activeDebts.length === 0 ? (
-            <Text style={styles.settledLine}>
-              {formatNetBalanceLine(netRoommateBalance)}
-            </Text>
+            <Text style={styles.settledLine}>All settled up 🎉</Text>
           ) : (
             <>
-              <Text
-                style={[
-                  styles.netLine,
-                  netRoommateBalance > 0 && styles.netLinePositive,
-                  netRoommateBalance < 0 && styles.netLineNegative,
-                ]}
-              >
-                {formatNetBalanceLine(netRoommateBalance)}
-              </Text>
+              {/* One line per direction: what's owed to the student and
+                  what they owe, kept strictly apart. */}
+              {totalLentOut > 0 ? (
+                <Text style={[styles.netLine, styles.netLinePositive]}>
+                  They owe you {formatMoney(totalLentOut)}
+                </Text>
+              ) : null}
+              {totalBorrowed > 0 ? (
+                <Text
+                  style={[
+                    styles.netLine,
+                    styles.netLineNegative,
+                    styles.netLineRow,
+                  ]}
+                >
+                  I owe {formatMoney(totalBorrowed)}
+                </Text>
+              ) : null}
               <Text style={styles.netMeta}>
                 {activeDebts.length} open{' '}
                 {activeDebts.length === 1 ? 'debt' : 'debts'} carried forward
@@ -314,8 +320,8 @@ export default function SummaryScreen() {
           )}
 
           <Text style={styles.cardFootnote}>
-            IOUs are not part of your monthly spend — settle or record them on
-            the Debts tab.
+            Creating or settling an IOU posts its cash movement to the
+            ledger — manage both on the Debts tab.
           </Text>
         </View>
 
@@ -523,6 +529,10 @@ const styles = StyleSheet.create({
   },
   netLineNegative: {
     color: colors.expense,
+  },
+  // Gap so two stacked direction lines never touch.
+  netLineRow: {
+    marginTop: spacing.xs,
   },
   netMeta: {
     marginTop: 2,
