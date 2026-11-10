@@ -14,7 +14,7 @@
 import { create } from 'zustand';
 
 import {
-  addDebt as insertDebt,
+  addDebtWithMovement as insertDebtWithMovement,
   addTransaction as insertTransaction,
   getDebts,
   getTransactions,
@@ -32,7 +32,12 @@ export interface FinanceState {
   totalIncome: number;
   /** Sum of `expense` transactions (2-dp rounded). */
   totalExpenses: number;
-  /** `totalIncome - totalExpenses`; negative means the student is in the red. */
+  /**
+   * `totalIncome - totalExpenses`; negative means the student is in the
+   * red. Lending and borrowing record an `expense` on creation (see
+   * {@link FinanceState.addDebt}), so money committed to an IOU leaves
+   * the balance immediately instead of lingering as available cash.
+   */
   netBalance: number;
   /** Convenience view: only debts whose `status === 'open'`. */
   activeDebts: Debt[];
@@ -57,7 +62,10 @@ export interface FinanceState {
     tag?: string,
     note?: string,
   ) => Promise<void>;
-  /** Persists a debt, then appends it to local state. */
+  /**
+   * Persists a debt together with the expense that moves it out of
+   * `netBalance`, then appends both to local state in one update.
+   */
   addDebt: (personName: string, amount: number, type: DebtType) => Promise<void>;
   /** Marks a debt settled, then updates it in local state. */
   settleDebt: (debtId: number) => Promise<void>;
@@ -184,14 +192,28 @@ export const useFinanceStore = create<FinanceState>()((set) => ({
     }
   },
 
-  /** Persists a debt and prepends it, keeping active debts in sync. */
+  /**
+   * Persists a debt plus its balance movement in one transaction, then
+   * updates both lists and both derivations in a single `set`, so the
+   * balance, the debt banner and the feed can never disagree.
+   */
   addDebt: async (personName, amount, type) => {
     set({ error: null });
     try {
-      const created = await insertDebt(personName, amount, type);
+      const { debt: created, movement } = await insertDebtWithMovement(
+        personName,
+        amount,
+        type,
+      );
       set((state) => {
         const debts = [created, ...state.debts];
-        return { debts, ...deriveDebtSummary(debts) };
+        const transactions = [movement, ...state.transactions];
+        return {
+          debts,
+          transactions,
+          ...deriveDebtSummary(debts),
+          ...deriveTotals(transactions),
+        };
       });
     } catch (error) {
       set({ error: toMessage(error) });
@@ -199,9 +221,11 @@ export const useFinanceStore = create<FinanceState>()((set) => ({
   },
 
   /**
-   * Marks a debt settled. Totals are intentionally untouched: settling an
-   * IOU is not a money movement — record it as a transaction separately if
-   * it should affect the balance.
+   * Marks a debt settled. Totals are intentionally untouched: the outward
+   * cash movement was already recorded as an expense when the debt was
+   * created (see `addDebt`), and settling an IOU moves no new money —
+   * record repayment (or repayment received) as its own transaction when
+   * it happens.
    */
   settleDebt: async (debtId) => {
     set({ error: null });

@@ -177,6 +177,55 @@ export async function addDebt(
 }
 
 /**
+ * Records a debt together with the cash movement it causes, atomically.
+ *
+ * Both directions leave the student's available balance: lending hands
+ * real cash over, and borrowed money is committed to repayment rather
+ * than free to spend. The movement is persisted as an `expense` ledger
+ * entry — so `netBalance` (`income - expenses`) reflects it immediately
+ * — while the debt row itself remains the receivable (`owed_to_you`) or
+ * the liability (`you_owe`).
+ *
+ * Runs both inserts in a single SQLite transaction: either the debt and
+ * its movement both land, or neither does.
+ *
+ * @param personName Non-empty name of the counterparty.
+ * @param amount     Positive money magnitude (rounded to 2 decimals).
+ * @param type       `'owed_to_you'` or `'you_owe'`.
+ * @returns The persisted debt and the matching expense transaction.
+ * @throws If validation fails or the insert cannot be read back; the
+ *         transaction is rolled back, leaving no partial records.
+ */
+export async function addDebtWithMovement(
+  personName: string,
+  amount: number,
+  type: DebtType,
+): Promise<{ debt: Debt; movement: Transaction }> {
+  const lent = type === 'owed_to_you';
+  const counterparty = personName.trim();
+
+  let debt: Debt | undefined;
+  let movement: Transaction | undefined;
+
+  const db = await getDatabase();
+  await db.withTransactionAsync(async () => {
+    debt = await addDebt(personName, amount, type);
+    movement = await addTransaction(
+      amount,
+      'expense',
+      lent ? 'Lending' : 'Borrowing',
+      undefined,
+      lent ? `Lent to ${counterparty}` : `Borrowed from ${counterparty}`,
+    );
+  });
+
+  if (!debt || !movement) {
+    throw new Error('Debt transaction did not complete.');
+  }
+  return { debt, movement };
+}
+
+/**
  * Marks an outstanding debt as settled.
  *
  * The `WHERE ... AND status = 'open'` clause makes this idempotent: a second

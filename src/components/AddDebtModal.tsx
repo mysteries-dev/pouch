@@ -47,8 +47,9 @@ export interface AddDebtModalProps {
 }
 
 export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
-  // Store action: writes to SQLite, then updates `debts`, `activeDebts`
-  // and `netRoommateBalance` together.
+  // Store action: writes the IOU plus its expense movement to SQLite,
+  // then updates `debts`, `activeDebts`, `netRoommateBalance` and the
+  // money totals together — so `netBalance` drops in the same frame.
   const addDebt = useFinanceStore((state) => state.addDebt);
 
   // Bottom inset so the sheet's Save row never sits under the system
