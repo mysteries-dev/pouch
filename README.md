@@ -5,7 +5,7 @@
 <h1 align="center">Pouch</h1>
 
 <p align="center">
-  <a href="https://github.com/mysteries-dev/pouch/releases/download/v1.5.0/pouch-v1.5.0.apk"><img src="https://img.shields.io/badge/Download-Pouch_v1.5.0_APK-success?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
+  <a href="https://github.com/mysteries-dev/pouch/releases/download/v1.6.0/pouch-v1.6.0.apk"><img src="https://img.shields.io/badge/Download-Pouch_v1.6.0_APK-success?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" /></a>
   <a href="https://github.com/mysteries-dev/pouch/actions"><img src="https://img.shields.io/github/actions/workflow/status/mysteries-dev/pouch/build-apk.yml?branch=main&style=for-the-badge&logo=github" alt="Build Status" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/github/license/mysteries-dev/pouch?style=for-the-badge&color=blue" alt="License: MIT" /></a>
 </p>
