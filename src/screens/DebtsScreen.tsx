@@ -137,7 +137,7 @@ export default function DebtsScreen() {
         {/* Running shop tab (baki) — shown only while one is open. */}
         {totalShopTab > 0 ? (
           <View style={styles.bannerShopRow}>
-            <Text style={styles.bannerLabel}>Shop tab</Text>
+            <Text style={styles.bannerLabel}>Shop tab (baki)</Text>
             <Text
               style={styles.bannerShopValue}
               accessibilityLabel={`Shop tab ${formatMoney(totalShopTab)}`}

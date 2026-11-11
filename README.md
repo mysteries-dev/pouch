@@ -45,13 +45,15 @@ Income is not a salary line. Log money in on any day it arrives — a part-time 
 ### 🏷️ Custom Event Tags
 Attach free-form tags to any entry to group spending by what was actually happening: `#ApartmentMove`, `#ExamWeek`, `#RoadTrip`. Categories answer *"what kind of spend was this?"*; tags answer *"what was going on?"* — and the end-of-month audit rolls up by both.
 
-### 🤝 Roommate Debt Matrix
-Shared costs leave IOUs behind, and Pouch tracks them explicitly:
+### 🤝 Debt & Shop-Tab Tracker
+Shared costs leave IOUs behind, and Pouch tracks them explicitly — for people **and** shops:
 
 - **They Owe** — you fronted the money, someone owes you.
 - **I Owe** — you borrowed, you owe them.
+- **Shop tab (baki)** — the dokan let you take nasta or groceries on credit; each tab is tracked per shop, and your cash balance only drops when you **Pay Tab**.
+- **Store Credit** — cash you advanced to a shop, credited back when it settles.
 
-Each debt carries a person's name, an amount, and a status. A running net line phrased from your point of view — `You owe Tk 1,200.00`, `They owe you Tk 800.00`, or `All settled up 🎉` — keeps the picture clear, and **one tap marks a debt settled**. Settling keeps the history rather than deleting it, so the record of what happened survives.
+Each entry carries an entity type (person or shop), a name, an amount, and a status. Totals stay in separate buckets — what you owe people, what you owe shops, and what is owed to you never net against each other, and every IOU settles on its own, so one person's balance never cancels another's. A running line phrased from your point of view — `You owe Tk 1,200.00`, `Shop tab Tk 350.00`, `They owe you Tk 800.00`, or `All settled up 🎉` — keeps the picture clear, and **one tap marks an entry settled**. Settling keeps the history rather than deleting it, so the record of what happened survives.
 
 ### 📊 End-of-Month Audit & Local CSV Export
 Pick a month and see how it actually went: income against spending, a category breakdown, and a tag-by-tag view of what drove the month. Export the lot as a spreadsheet-ready CSV — `Date,Type,Category,Amount,Tag,Note` — written to local storage and handed to your device's share sheet.

@@ -1,5 +1,5 @@
 /**
- * Route: `/debts` — the Roommate & Shared Debt tracker.
+ * Route: `/debts` — the Roommate, Friend & Shop-Tab (baki) tracker.
  * Thin wrapper so route files stay trivial: the real UI lives in
  * `src/screens/DebtsScreen.tsx`.
  */

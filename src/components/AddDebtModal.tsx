@@ -68,12 +68,27 @@ function balanceHint(
 ): string {
   if (direction === 'you_owe') {
     return entityType === 'shop'
-      ? 'Store tab — balance drops only when you pay the shop.'
+      ? 'Store tab (baki) — balance drops only when you pay the shop.'
       : 'Balance drops only when you repay.';
   }
   return entityType === 'shop'
     ? 'Cash advanced now — credited back when the shop pays you.'
     : 'Balance drops now; credited back when they repay.';
+}
+
+/**
+ * Amount-field copy per entity: a shop you owe reads as the store tab
+ * itself — "Amount Owed to Store" — and store credit says who it is owed
+ * to; people keep the plain label.
+ */
+function amountLabelFor(
+  entityType: DebtEntityType,
+  direction: DebtType,
+): string {
+  if (entityType !== 'shop') return 'Amount';
+  return direction === 'you_owe'
+    ? 'Amount Owed to Store'
+    : 'Store Credit Owed to You';
 }
 
 export interface AddDebtModalProps {
@@ -116,7 +131,11 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
     const parsed = Number.parseFloat(amount);
 
     if (name.length === 0) {
-      setFormError('Who is this IOU with?');
+      setFormError(
+        entityType === 'shop'
+          ? 'Which shop is this tab with?'
+          : 'Who is this IOU with?',
+      );
       return;
     }
     if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -211,9 +230,10 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
                 })}
               </View>
 
-              {/* Counterparty name — a person's name or the shop's. */}
+              {/* Counterparty name — a person's name, or the shop the
+                  tab (baki) is with: "Tab with [Shop Name]". */}
               <Text style={styles.fieldLabel}>
-                {entityType === 'shop' ? 'Which shop' : 'Who’s it with'}
+                {entityType === 'shop' ? 'Tab with' : 'Who’s it with'}
               </Text>
               <TextInput
                 ref={nameInputRef}
@@ -233,7 +253,9 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
               />
 
               {/* Amount */}
-              <Text style={styles.fieldLabel}>Amount</Text>
+              <Text style={styles.fieldLabel}>
+                {amountLabelFor(entityType, direction)}
+              </Text>
               <View style={styles.amountBox}>
                 <Text style={styles.currencySymbol}>{CURRENCY}</Text>
                 <TextInput
@@ -247,7 +269,7 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
                   selectionColor={accentColor}
                   onSubmitEditing={handleSubmit}
                   style={styles.amountInput}
-                  accessibilityLabel="Amount"
+                  accessibilityLabel={amountLabelFor(entityType, direction)}
                 />
               </View>
 
