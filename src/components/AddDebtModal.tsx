@@ -1,11 +1,14 @@
 /**
  * Pouch — AddDebtModal.
  *
- * The IOU recorder: person name, amount and direction ("I Owe" vs
- * "They Owe Me"), saved to SQLite through `addDebt()` and dismissed on the
- * same tap. Shares its sheet chrome with FastLoggerModal; the parent
- * remounts it once per session (a changing `key`), so every open starts
- * with a clean form — no reset effect, no cascading renders.
+ * The IOU recorder, for people *and* shops: an entity toggle (Person /
+ * Shop), the counterparty's name, amount and direction — tailored labels
+ * ("I Owe Shop", "Shop Owes Me", **Add Tab**) plus a caption stating when
+ * the entry actually moves cash. Saved to SQLite through `addDebt()` and
+ * dismissed on the same tap. Shares its sheet chrome with
+ * FastLoggerModal; the parent remounts it once per session (a changing
+ * `key`), so every open starts with a clean form — no reset effect, no
+ * cascading renders.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -23,7 +26,7 @@ import {
 import type { TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { DebtType } from '../db/schema';
+import type { DebtEntityType, DebtType } from '../db/schema';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { colors, radius, spacing } from '../theme';
 import {
@@ -33,11 +36,45 @@ import {
   sanitizeAmountInput,
 } from '../utils/format';
 
-/** Direction options, always phrased from the student's point of view. */
-const DIRECTIONS: { type: DebtType; label: string }[] = [
-  { type: 'you_owe', label: 'I Owe' },
-  { type: 'owed_to_you', label: 'They Owe Me' },
+/** Entity choices, phrased the way a student would say it. */
+const ENTITIES: { type: DebtEntityType; label: string }[] = [
+  { type: 'person', label: 'Person' },
+  { type: 'shop', label: 'Shop' },
 ];
+
+/** Direction options per entity, always from the student's point of view. */
+const DIRECTIONS: Record<
+  DebtEntityType,
+  { type: DebtType; label: string }[]
+> = {
+  person: [
+    { type: 'you_owe', label: 'I Owe' },
+    { type: 'owed_to_you', label: 'They Owe Me' },
+  ],
+  shop: [
+    { type: 'you_owe', label: 'I Owe Shop' },
+    { type: 'owed_to_you', label: 'Shop Owes Me' },
+  ],
+};
+
+/**
+ * One-line explanation of when this entry hits the cash balance — the
+ * rules differ by direction (and, for shops, the tab only settles on
+ * payment), so the sheet states them instead of leaving them implicit.
+ */
+function balanceHint(
+  entityType: DebtEntityType,
+  direction: DebtType,
+): string {
+  if (direction === 'you_owe') {
+    return entityType === 'shop'
+      ? 'Store tab — balance drops only when you pay the shop.'
+      : 'Balance drops only when you repay.';
+  }
+  return entityType === 'shop'
+    ? 'Cash advanced now — credited back when the shop pays you.'
+    : 'Balance drops now; credited back when they repay.';
+}
 
 export interface AddDebtModalProps {
   /** Whether the sheet is on screen. */
@@ -47,10 +84,10 @@ export interface AddDebtModalProps {
 }
 
 export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
-  // Store action: writes the IOU to SQLite — plus the lending expense,
-  // since cash leaves the wallet when you lend — then updates `debts`,
-  // `activeDebts`, `totalLentOut`/`totalBorrowed` and the money totals
-  // together. A borrow books no balance movement until it is settled.
+  // Store action: writes the IOU to SQLite — plus the lending/advance
+  // expense, since cash leaves the wallet then — then updates `debts`,
+  // `activeDebts`, the three direction totals and the money totals
+  // together. A borrow or shop tab books no balance movement until paid.
   const addDebt = useFinanceStore((state) => state.addDebt);
 
   // Bottom inset so the sheet's Save row never sits under the system
@@ -60,6 +97,7 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
 
   const [personName, setPersonName] = useState('');
   const [amount, setAmount] = useState('');
+  const [entityType, setEntityType] = useState<DebtEntityType>('person');
   const [direction, setDirection] = useState<DebtType>('you_owe');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -87,7 +125,7 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
     }
     setFormError(null);
 
-    void addDebt(name, roundMoney(parsed), direction);
+    void addDebt(name, roundMoney(parsed), direction, entityType);
     onClose();
   };
 
@@ -140,13 +178,50 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.sheetBody}
             >
-              {/* Person */}
-              <Text style={styles.fieldLabel}>Who’s it with</Text>
+              {/* Entity type: person or shop (store credit / tab). */}
+              <Text style={styles.fieldLabel}>Type</Text>
+              <View style={styles.toggle}>
+                {ENTITIES.map((option) => {
+                  const isActive = option.type === entityType;
+                  return (
+                    <Pressable
+                      key={option.type}
+                      onPress={() => {
+                        setEntityType(option.type);
+                        setFormError(null);
+                      }}
+                      style={({ pressed }) => [
+                        styles.toggleButton,
+                        isActive && styles.toggleButtonActive,
+                        pressed && styles.togglePressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      <Text
+                        style={[
+                          styles.toggleLabel,
+                          isActive && styles.toggleLabelActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Counterparty name — a person's name or the shop's. */}
+              <Text style={styles.fieldLabel}>
+                {entityType === 'shop' ? 'Which shop' : 'Who’s it with'}
+              </Text>
               <TextInput
                 ref={nameInputRef}
                 value={personName}
                 onChangeText={setPersonName}
-                placeholder="Roommate's name"
+                placeholder={
+                  entityType === 'shop' ? 'Shop / dokan name' : "Roommate's name"
+                }
                 placeholderTextColor={colors.textMuted}
                 autoCapitalize="words"
                 autoCorrect={false}
@@ -154,7 +229,7 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
                 selectionColor={accentColor}
                 returnKeyType="next"
                 style={styles.nameInput}
-                accessibilityLabel="Person name"
+                accessibilityLabel="Counterparty name"
               />
 
               {/* Amount */}
@@ -179,7 +254,7 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
               {/* Direction */}
               <Text style={styles.fieldLabel}>Direction</Text>
               <View style={styles.toggle}>
-                {DIRECTIONS.map((option) => {
+                {DIRECTIONS[entityType].map((option) => {
                   const isActive = option.type === direction;
                   const optionColor =
                     option.type === 'you_owe' ? colors.expense : colors.income;
@@ -212,6 +287,11 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
                 })}
               </View>
 
+              {/* When this entry actually moves cash — spelled out. */}
+              <Text style={styles.formHint}>
+                {balanceHint(entityType, direction)}
+              </Text>
+
               {formError !== null ? (
                 <Text style={styles.formError}>{formError}</Text>
               ) : null}
@@ -225,9 +305,13 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
                   pressed && styles.submitPressed,
                 ]}
                 accessibilityRole="button"
-                accessibilityLabel="Add debt"
+                accessibilityLabel={
+                  entityType === 'shop' ? 'Add shop tab' : 'Add debt'
+                }
               >
-                <Text style={styles.submitLabel}>Add Debt</Text>
+                <Text style={styles.submitLabel}>
+                  {entityType === 'shop' ? 'Add Tab' : 'Add Debt'}
+                </Text>
                 {Number.parseFloat(amount) > 0 ? (
                   <Text style={styles.submitAmount}>
                     {formatMoney(roundMoney(Number.parseFloat(amount)))}
@@ -353,6 +437,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Entity toggle uses a neutral dark fill — income/expense colours are
+  // reserved for money direction.
+  toggleButtonActive: {
+    backgroundColor: colors.text,
+  },
   togglePressed: {
     opacity: 0.85,
   },
@@ -369,6 +458,14 @@ const styles = StyleSheet.create({
     color: colors.expense,
     textAlign: 'center',
     marginTop: spacing.md,
+  },
+  // Balance-rule caption under the direction toggle.
+  formHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   submitButton: {
     minHeight: 54,

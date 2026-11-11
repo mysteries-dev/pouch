@@ -7,8 +7,8 @@
  *    travel backwards (you cannot audit a month that hasn't happened),
  *  - the month's headline numbers: Money In, Expenses and Net Remaining,
  *  - `CategoryBreakdown` and `TagSummary` for where the money went,
- *  - a roll-forward card listing roommate IOUs that stay open past this
- *    month,
+ *  - a roll-forward card listing IOUs and shop tabs that stay open past
+ *    this month,
  *  - and **Export Month to CSV**, which writes the month to a local file
  *    and opens the OS share sheet.
  *
@@ -78,9 +78,11 @@ export default function SummaryScreen() {
   // so all three tabs describe one identical dataset.
   const transactions = useFinanceStore((state) => state.transactions);
   const activeDebts = useFinanceStore((state) => state.activeDebts);
-  // Independent direction totals — one line each, never netted.
+  // Independent direction totals — one line each, never netted; the shop
+  // tab gets its own line so baki stays visible and separate.
   const totalLentOut = useFinanceStore((state) => state.totalLentOut);
   const totalBorrowed = useFinanceStore((state) => state.totalBorrowed);
+  const totalShopTab = useFinanceStore((state) => state.totalShopTab);
 
   // Offset in whole months from the current one: `0` is this month, `-1`
   // is last month. Staying at or below zero is what caps the selector at
@@ -274,14 +276,14 @@ export default function SummaryScreen() {
         {/* Unresolved IOUs carried into the next month. */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Rolling into next month</Text>
-          <Text style={styles.cardSubtitle}>Unresolved roommate balances</Text>
+          <Text style={styles.cardSubtitle}>Open IOUs and shop tabs</Text>
 
           {activeDebts.length === 0 ? (
             <Text style={styles.settledLine}>All settled up 🎉</Text>
           ) : (
             <>
-              {/* One line per direction: what's owed to the student and
-                  what they owe, kept strictly apart. */}
+              {/* One line per bucket: owed to the student, owed to
+                  people, owed to shops — kept strictly apart. */}
               {totalLentOut > 0 ? (
                 <Text style={[styles.netLine, styles.netLinePositive]}>
                   They owe you {formatMoney(totalLentOut)}
@@ -296,6 +298,17 @@ export default function SummaryScreen() {
                   ]}
                 >
                   I owe {formatMoney(totalBorrowed)}
+                </Text>
+              ) : null}
+              {totalShopTab > 0 ? (
+                <Text
+                  style={[
+                    styles.netLine,
+                    styles.netLineNegative,
+                    styles.netLineRow,
+                  ]}
+                >
+                  Shop tab {formatMoney(totalShopTab)}
                 </Text>
               ) : null}
               <Text style={styles.netMeta}>

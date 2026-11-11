@@ -41,11 +41,26 @@ const SCHEMA_SQL = `
     amount      REAL NOT NULL CHECK (amount > 0),
     type        TEXT NOT NULL CHECK (type IN ('owed_to_you', 'you_owe')),
     status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'settled')),
+    entity_type TEXT NOT NULL DEFAULT 'person' CHECK (entity_type IN ('person', 'shop')),
     created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     settled_at  TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_debts_status ON debts (status);
+`;
+
+/**
+ * v1.6.0 migration: databases created before entity types lack the
+ * `entity_type` column, and `CREATE TABLE IF NOT EXISTS` will not add it
+ * to an existing table. `ALTER TABLE ... ADD COLUMN` cannot be re-run, so
+ * the column list is inspected first — legacy rows backfill to `'person'`
+ * (the only kind that existed), and fresh databases already create the
+ * column above and skip this entirely.
+ */
+const MIGRATION_ENTITY_TYPE_SQL = `
+  ALTER TABLE debts
+    ADD COLUMN entity_type TEXT NOT NULL DEFAULT 'person'
+    CHECK (entity_type IN ('person', 'shop'));
 `;
 
 /**
@@ -72,6 +87,15 @@ async function openAndMigrate(): Promise<SQLiteDatabase> {
   }
 
   await db.execAsync(SCHEMA_SQL);
+
+  // One-time column backfill for pre-v1.6.0 databases (no-op elsewhere).
+  const debtColumns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(debts)',
+  );
+  if (!debtColumns.some((column) => column.name === 'entity_type')) {
+    await db.execAsync(MIGRATION_ENTITY_TYPE_SQL);
+  }
+
   return db;
 }
 

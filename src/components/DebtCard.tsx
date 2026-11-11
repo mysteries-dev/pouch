@@ -1,9 +1,11 @@
 /**
  * Pouch — DebtCard.
  *
- * One IOU in the Debts list: person, amount, date and the direction tag
- * ("I Owe" vs "They Owe Me"), plus a single-tap **Settle Up** that goes
- * straight to `settleDebt()` in the store (SQLite write first, state second).
+ * One IOU in the Debts list — with a person or a shop: counterparty,
+ * amount, date and a direction tag tailored to the entity ("I Owe" /
+ * "They Owe Me" vs "Shop Tab" / "Shop Owes You"), plus a single-tap
+ * **Settle Up** (**Pay Tab** for shops you owe) that goes straight to
+ * `settleDebt()` in the store (SQLite write first, state second).
  * Settled rows swap the button for a muted confirmation instead.
  */
 
@@ -27,11 +29,34 @@ export default function DebtCard({ debt }: DebtCardProps) {
 
   const isOpen = debt.status === 'open';
   const isIOwe = debt.type === 'you_owe';
+  const isShop = debt.entityType === 'shop';
 
-  // Direction is always phrased from the student's point of view.
-  const directionLabel = isIOwe ? 'I Owe' : 'They Owe Me';
+  // Direction is always phrased from the student's point of view; a shop
+  // you owe reads as a tab (baki), one that owes you as store credit.
+  const directionLabel = isShop
+    ? isIOwe
+      ? 'Shop Tab'
+      : 'Shop Owes You'
+    : isIOwe
+      ? 'I Owe'
+      : 'They Owe Me';
   const directionColor = isIOwe ? colors.expense : colors.income;
   const directionSoft = isIOwe ? colors.expenseSoft : colors.incomeSoft;
+
+  // Spoken label spells the full relationship for tabs: "Tab with
+  // Bhai Bhai Dokan: Tk 150.00".
+  const amountLabel =
+    isShop && isIOwe
+      ? `Tab with ${debt.personName}: ${formatMoney(debt.amount)}`
+      : `${directionLabel} ${formatMoney(debt.amount)}`;
+
+  // Paying a tab is settling, but the button says what really happens.
+  const settleLabel =
+    isShop && isIOwe ? 'Pay Tab' : 'Settle Up';
+  const settleA11yLabel =
+    isShop && isIOwe
+      ? `Pay tab at ${debt.personName}`
+      : `Settle up with ${debt.personName}`;
 
   return (
     <View style={[styles.card, !isOpen && styles.cardSettled]}>
@@ -49,12 +74,15 @@ export default function DebtCard({ debt }: DebtCardProps) {
           <Text style={styles.personName} numberOfLines={1}>
             {debt.personName}
           </Text>
-          <Text style={styles.date}>Added {formatDateLong(debt.createdAt)}</Text>
+          <Text style={styles.date}>
+            {isShop ? 'Shop · Added ' : 'Added '}
+            {formatDateLong(debt.createdAt)}
+          </Text>
         </View>
 
         <Text
           style={[styles.amount, { color: directionColor }]}
-          accessibilityLabel={`${directionLabel} ${formatMoney(debt.amount)}`}
+          accessibilityLabel={amountLabel}
         >
           {formatMoney(debt.amount)}
         </Text>
@@ -69,9 +97,9 @@ export default function DebtCard({ debt }: DebtCardProps) {
             pressed && styles.settlePressed,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={`Settle up with ${debt.personName}`}
+          accessibilityLabel={settleA11yLabel}
         >
-          <Text style={styles.settleLabel}>Settle Up</Text>
+          <Text style={styles.settleLabel}>{settleLabel}</Text>
         </Pressable>
       ) : (
         <Text style={styles.settledDate}>

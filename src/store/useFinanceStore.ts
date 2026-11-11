@@ -5,9 +5,9 @@
  * screen reads from one on-device source of truth. The pattern is always the
  * same: persist first (SQLite), then mirror the result into memory so
  * subscribers re-render. Derived values (`totalIncome`, `totalExpenses`,
- * `netBalance`, `activeDebts`, `totalLentOut`, `totalBorrowed`) are
- * recomputed inside the same `set` call, so they can never drift from the
- * raw arrays.
+ * `netBalance`, `activeDebts`, `totalLentOut`, `totalBorrowed`,
+ * `totalShopTab`) are recomputed inside the same `set` call, so they can
+ * never drift from the raw arrays.
  *
  * No cloud sync, no network calls — the store is fully offline-first.
  */
@@ -21,7 +21,13 @@ import {
   getTransactions,
   settleDebtWithMovement as insertSettlement,
 } from '../db/queries';
-import type { Debt, DebtType, Transaction, TransactionType } from '../db/schema';
+import type {
+  Debt,
+  DebtEntityType,
+  DebtType,
+  Transaction,
+  TransactionType,
+} from '../db/schema';
 
 /** Shape of the store: raw records, derived totals, and actions. */
 export interface FinanceState {
@@ -44,17 +50,24 @@ export interface FinanceState {
   /** Convenience view: only debts whose `status === 'open'`. */
   activeDebts: Debt[];
   /**
-   * Total money lent out across *open* debts (`owed_to_you`) — "they owe
-   * you". Kept strictly separate from what the student owes: lent and
-   * borrowed balances are never netted against each other or across
-   * people.
+   * Total money lent out across *open* debts (`owed_to_you`, people and
+   * shops alike) — "they owe you". Kept strictly separate from what the
+   * student owes: no bucket is ever netted against another, across
+   * people or across shops.
    */
   totalLentOut: number;
   /**
-   * Total money borrowed across *open* debts (`you_owe`) — "I owe",
-   * independent of {@link FinanceState.totalLentOut}.
+   * Total money owed to *people* across open `you_owe` debts — "I owe".
+   * Shop tabs live in {@link FinanceState.totalShopTab} instead, so a
+   * running baki never blends into personal balances.
    */
   totalBorrowed: number;
+  /**
+   * Total money owed to *shops* across open `you_owe` debts — the store
+   * tab (baki). Balance-relevant only when it is paid (see
+   * {@link FinanceState.settleDebt}).
+   */
+  totalShopTab: number;
   /** True while the initial (or a refresh) load is in flight. */
   isLoading: boolean;
   /** Last user-facing error message, or `null`. Cleared on the next action. */
@@ -71,16 +84,21 @@ export interface FinanceState {
     note?: string,
   ) => Promise<void>;
   /**
-   * Persists a debt. A lend also writes the expense that moves the cash
-   * out of `netBalance`, in the same SQLite transaction as the debt; a
-   * borrow creates only the liability (no balance movement until it is
-   * settled).
+   * Persists a debt with a person or a shop. A lend also writes the
+   * expense that moves the cash out of `netBalance`, in the same SQLite
+   * transaction as the debt; a borrow / shop tab creates only the
+   * liability (no balance movement until it is settled).
    */
-  addDebt: (personName: string, amount: number, type: DebtType) => Promise<void>;
+  addDebt: (
+    personName: string,
+    amount: number,
+    type: DebtType,
+    entityType?: DebtEntityType,
+  ) => Promise<void>;
   /**
    * Marks a debt settled and records the repayment's cash movement
    * atomically: money comes back for a lend, and leaves the balance for
-   * the first time for a borrow.
+   * the first time for a borrow or shop tab.
    */
   settleDebt: (debtId: number) => Promise<void>;
   /** Clears the current error message. */
@@ -129,24 +147,31 @@ function deriveTotals(
 
 /**
  * Derives everything the UI shows about debts from the raw list: the open
- * rows (`activeDebts`) plus the two independent totals — lent out and
- * borrowed — which are summed separately and never netted. Always called
- * inside the same `set` as a debt change, so list and totals move together.
+ * rows (`activeDebts`) plus three independent totals — lent out, owed to
+ * people, owed to shops — each summed from a single direction/entity
+ * bucket and never netted against another. Always called inside the same
+ * `set` as a debt change, so list and totals move together.
  */
 function deriveDebtSummary(
   debts: Debt[],
-): Pick<FinanceState, 'activeDebts' | 'totalLentOut' | 'totalBorrowed'> {
+): Pick<
+  FinanceState,
+  'activeDebts' | 'totalLentOut' | 'totalBorrowed' | 'totalShopTab'
+> {
   const activeDebts: Debt[] = [];
   let lentOut = 0;
   let borrowed = 0;
+  let shopTab = 0;
 
   for (const debt of debts) {
     if (debt.status !== 'open') continue;
     activeDebts.push(debt);
-    // Direction always from the student's point of view; each bucket
-    // only ever sees its own direction's debts.
+    // Direction first, then entity: shops you owe form the tab; anything
+    // owed to the student counts as receivable whoever owes it.
     if (debt.type === 'owed_to_you') {
       lentOut += debt.amount;
+    } else if (debt.entityType === 'shop') {
+      shopTab += debt.amount;
     } else {
       borrowed += debt.amount;
     }
@@ -156,6 +181,7 @@ function deriveDebtSummary(
     activeDebts,
     totalLentOut: roundMoney(lentOut),
     totalBorrowed: roundMoney(borrowed),
+    totalShopTab: roundMoney(shopTab),
   };
 }
 
@@ -179,6 +205,7 @@ export const useFinanceStore = create<FinanceState>()((set) => ({
   activeDebts: [],
   totalLentOut: 0,
   totalBorrowed: 0,
+  totalShopTab: 0,
   isLoading: false,
   error: null,
 
@@ -218,18 +245,20 @@ export const useFinanceStore = create<FinanceState>()((set) => ({
   },
 
   /**
-   * Persists a debt plus (for a lend) its expense movement in one SQLite
-   * transaction, then updates the lists and every derivation in a single
-   * `set`, so the balance, the totals and the feed can never disagree.
-   * A borrow writes no movement — its balance leaves only at settlement.
+   * Persists a debt plus (when cash leaves the wallet) its expense
+   * movement in one SQLite transaction, then updates the lists and every
+   * derivation in a single `set`, so the balance, the totals and the feed
+   * can never disagree. A borrow or shop tab writes no movement — its
+   * balance leaves only at settlement.
    */
-  addDebt: async (personName, amount, type) => {
+  addDebt: async (personName, amount, type, entityType) => {
     set({ error: null });
     try {
       const { debt: created, movement } = await insertDebtWithMovement(
         personName,
         amount,
         type,
+        entityType,
       );
       set((state) => {
         const debts = [created, ...state.debts];
@@ -251,8 +280,8 @@ export const useFinanceStore = create<FinanceState>()((set) => ({
   /**
    * Settles a debt and records the repayment that changes hands, in one
    * SQLite transaction: a lend being paid back credits the balance, a
-   * borrow being repaid debits it for the first time. Lists, totals and
-   * debt summary then move together in a single `set`.
+   * borrow or shop tab being repaid debits it for the first time. Lists,
+   * totals and debt summary then move together in a single `set`.
    */
   settleDebt: async (debtId) => {
     set({ error: null });

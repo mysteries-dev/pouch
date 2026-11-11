@@ -10,6 +10,7 @@
 import { getDatabase } from './client';
 import type {
   Debt,
+  DebtEntityType,
   DebtRow,
   DebtType,
   Transaction,
@@ -41,6 +42,7 @@ function mapRowToDebt(row: DebtRow): Debt {
     personName: row.person_name,
     amount: row.amount,
     type: row.type,
+    entityType: row.entity_type,
     status: row.status,
     createdAt: row.created_at,
     settledAt: row.settled_at ?? null,
@@ -137,11 +139,13 @@ export async function getTransactions(): Promise<Transaction[]> {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Records a new debt (money lent to, or borrowed from, someone).
+ * Records a new debt (money lent to, or borrowed from, a person or shop).
  *
- * @param personName Non-empty name of the counterparty.
+ * @param personName Non-empty name of the counterparty (person or shop).
  * @param amount     Positive money magnitude (rounded to 2 decimals).
  * @param type       `'owed_to_you'` or `'you_owe'`.
+ * @param entityType `'person'` (roommate, friend) or `'shop'` (dokan /
+ *                   store credit / baki tab). Defaults to `'person'`.
  * @returns The persisted debt, always with `status: 'open'`.
  * @throws If the name or amount is invalid, or the insert cannot be read back.
  */
@@ -149,6 +153,7 @@ export async function addDebt(
   personName: string,
   amount: number,
   type: DebtType,
+  entityType: DebtEntityType = 'person',
 ): Promise<Debt> {
   const normalizedAmount = assertPositiveAmount(amount, 'Debt amount');
 
@@ -161,9 +166,9 @@ export async function addDebt(
   const createdAt = new Date().toISOString();
 
   const result = await db.runAsync(
-    `INSERT INTO debts (person_name, amount, type, status, created_at)
-     VALUES (?, ?, ?, 'open', ?)`,
-    [normalizedName, normalizedAmount, type, createdAt],
+    `INSERT INTO debts (person_name, amount, type, status, entity_type, created_at)
+     VALUES (?, ?, ?, 'open', ?, ?)`,
+    [normalizedName, normalizedAmount, type, entityType, createdAt],
   );
 
   const row = await db.getFirstAsync<DebtRow>(
@@ -179,21 +184,23 @@ export async function addDebt(
 /**
  * Records a debt, together with the cash movement it causes, atomically.
  *
- * LENDING (`owed_to_you`) hands real cash over, so an `expense` ledger
- * entry (`Lending` / "Lent to X") is written alongside the debt and
- * `netBalance` drops immediately. BORROWING (`you_owe`) creates only the
- * liability — nothing crosses the wallet yet, so the balance is untouched
- * at creation; the money leaves when the student taps **Settle Up** (see
- * {@link settleDebtWithMovement}).
+ * LENDING (`owed_to_you` — to a person or an advance paid to a shop)
+ * hands real cash over, so an `expense` ledger entry (`Lending`) is
+ * written alongside the debt and `netBalance` drops immediately.
+ * OWING (`you_owe` — borrowed from a person, or a shop tab / baki)
+ * creates only the liability — nothing crosses the wallet yet, so the
+ * balance is untouched at creation; the money leaves when the student
+ * taps **Settle Up** / **Pay Tab** (see {@link settleDebtWithMovement}).
  *
  * Runs the writes in a single SQLite transaction: either everything
  * lands, or nothing does.
  *
- * @param personName Non-empty name of the counterparty.
+ * @param personName Non-empty name of the counterparty (person or shop).
  * @param amount     Positive money magnitude (rounded to 2 decimals).
  * @param type       `'owed_to_you'` or `'you_owe'`.
+ * @param entityType `'person'` or `'shop'`. Defaults to `'person'`.
  * @returns The persisted debt plus the lending expense, or `null` for
- *          the movement when nothing crossed the wallet yet (borrowing).
+ *          the movement when nothing crossed the wallet yet (owing).
  * @throws If validation fails or the insert cannot be read back; the
  *         transaction is rolled back, leaving no partial records.
  */
@@ -201,6 +208,7 @@ export async function addDebtWithMovement(
   personName: string,
   amount: number,
   type: DebtType,
+  entityType: DebtEntityType = 'person',
 ): Promise<{ debt: Debt; movement: Transaction | null }> {
   const lentOut = type === 'owed_to_you';
   const counterparty = personName.trim();
@@ -210,15 +218,16 @@ export async function addDebtWithMovement(
 
   const db = await getDatabase();
   await db.withTransactionAsync(async () => {
-    debt = await addDebt(personName, amount, type);
-    // Borrowing books no movement at creation — only lending moves cash.
+    debt = await addDebt(personName, amount, type, entityType);
+    // Owing (person or shop tab) books no movement at creation — only
+    // money leaving the wallet does.
     if (lentOut) {
       movement = await addTransaction(
         amount,
         'expense',
         'Lending',
         undefined,
-        `Lent to ${counterparty}`,
+        `${entityType === 'shop' ? 'Advanced to' : 'Lent to'} ${counterparty}`,
       );
     }
   });
@@ -235,10 +244,11 @@ export async function addDebtWithMovement(
  * This is the moment money moves for an IOU, in the student's favour or
  * against it:
  *  - `owed_to_you` — they pay you back: an `income` entry ("X repaid
- *    you") credits `netBalance` with the cash lent out at creation.
- *  - `you_owe` — you pay them back: an `expense` entry ("You repaid X")
- *    debits `netBalance` — the first and only time borrowing touches the
- *    balance.
+ *    you" / "X paid you" for a shop) credits `netBalance` with the cash
+ *    lent out at creation.
+ *  - `you_owe` — you pay them back: an `expense` entry ("You repaid X",
+ *    or "Paid tab at X" for a shop) debits `netBalance` — the first and
+ *    only time a debt — personal or shop tab — touches the balance.
  *
  * The `status = 'open'` gate from {@link settleDebt} still guards the
  * write, so a double-tap (or an unknown id) writes no second movement.
@@ -259,15 +269,19 @@ export async function settleDebtWithMovement(
     const settled = await settleDebt(debtId);
     if (!settled) return;
 
-    const repaid = settled.type === 'owed_to_you';
+    const credited = settled.type === 'owed_to_you';
+    const isShop = settled.entityType === 'shop';
+    const note = credited
+      ? `${settled.personName} ${isShop ? 'paid you' : 'repaid you'}`
+      : isShop
+        ? `Paid tab at ${settled.personName}`
+        : `You repaid ${settled.personName}`;
     movement = await addTransaction(
       settled.amount,
-      repaid ? 'income' : 'expense',
+      credited ? 'income' : 'expense',
       'Repayment',
       undefined,
-      repaid
-        ? `${settled.personName} repaid you`
-        : `You repaid ${settled.personName}`,
+      note,
     );
     debt = settled;
   });

@@ -1,12 +1,12 @@
 /**
  * Pouch — Debts Screen ("I Owe / They Owe").
  *
- * The roommate & shared-debt tracker:
- *  - two independent totals — money lent out ("They owe you") and money
- *    borrowed ("I owe") — summed per direction and never netted across
- *    people, so every add or settle updates them in the same tick as the
- *    list,
- *  - an All / I Owe / They Owe Me segmented filter,
+ * The roommate, friend & shop-tab (baki) tracker:
+ *  - three independent totals — money lent out ("They owe you"), owed to
+ *    people ("I owe") and owed to shops ("Shop tab") — each summed from
+ *    its own bucket and never netted across people or shops, updated in
+ *    the same tick as the list,
+ *  - an All / I Owe / They Owe Me / Shops segmented filter,
  *  - a switch to reveal settled debts,
  *  - a scrollable list of `DebtCard`s and a floating **+ Add Debt** button.
  *
@@ -31,13 +31,14 @@ import { useFinanceStore } from '../store/useFinanceStore';
 import { colors, radius, spacing } from '../theme';
 import { formatMoney } from '../utils/format';
 
-/** List filter: everything, only what you owe, only what is owed to you. */
-type DebtFilter = 'all' | 'you_owe' | 'owed_to_you';
+/** List filter: everything, by direction, or only shop entries. */
+type DebtFilter = 'all' | 'you_owe' | 'owed_to_you' | 'shops';
 
 const FILTERS: { key: DebtFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'you_owe', label: 'I Owe' },
   { key: 'owed_to_you', label: 'They Owe Me' },
+  { key: 'shops', label: 'Shops' },
 ];
 
 export default function DebtsScreen() {
@@ -46,6 +47,7 @@ export default function DebtsScreen() {
   const activeDebts = useFinanceStore((state) => state.activeDebts);
   const totalLentOut = useFinanceStore((state) => state.totalLentOut);
   const totalBorrowed = useFinanceStore((state) => state.totalBorrowed);
+  const totalShopTab = useFinanceStore((state) => state.totalShopTab);
 
   const [filter, setFilter] = useState<DebtFilter>('all');
   const [showSettled, setShowSettled] = useState(false);
@@ -69,6 +71,7 @@ export default function DebtsScreen() {
       debts.filter((debt) => {
         if (!showSettled && debt.status !== 'open') return false;
         if (filter === 'all') return true;
+        if (filter === 'shops') return debt.entityType === 'shop';
         return debt.type === filter;
       }),
     [debts, filter, showSettled],
@@ -78,6 +81,9 @@ export default function DebtsScreen() {
   const emptyMessage = (): string => {
     if (debts.length === 0) {
       return 'Tap + Add Debt to record your first IOU.';
+    }
+    if (visibleDebts.length === 0 && filter === 'shops') {
+      return 'No shop entries yet — add a dokan tab with + Add Debt.';
     }
     if (visibleDebts.length === 0 && filter !== 'all') {
       return 'Nothing in this direction yet.';
@@ -92,11 +98,11 @@ export default function DebtsScreen() {
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
         <Text style={styles.title}>Debts</Text>
-        <Text style={styles.tagline}>Roommate & shared IOUs.</Text>
+        <Text style={styles.tagline}>Roommates, friends & shop tabs.</Text>
       </View>
 
-      {/* Independent IOU totals — lent and borrowed are never netted
-          against each other or across people. */}
+      {/* Independent totals — lent, owed to people and owed to shops are
+          never netted against each other or across entities. */}
       <View style={styles.banner}>
         <View style={styles.bannerColumns}>
           <View style={styles.bannerColumn}>
@@ -127,6 +133,20 @@ export default function DebtsScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Running shop tab (baki) — shown only while one is open. */}
+        {totalShopTab > 0 ? (
+          <View style={styles.bannerShopRow}>
+            <Text style={styles.bannerLabel}>Shop tab</Text>
+            <Text
+              style={styles.bannerShopValue}
+              accessibilityLabel={`Shop tab ${formatMoney(totalShopTab)}`}
+            >
+              {formatMoney(totalShopTab)}
+            </Text>
+          </View>
+        ) : null}
+
         <Text style={styles.bannerMeta}>
           {activeDebts.length} open {activeDebts.length === 1 ? 'debt' : 'debts'}
         </Text>
@@ -149,6 +169,10 @@ export default function DebtsScreen() {
               accessibilityState={{ selected: isActive }}
             >
               <Text
+                // Four chips share the row; long labels shrink, not clip.
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.75}
                 style={[
                   styles.filterLabel,
                   isActive && styles.filterLabelActive,
@@ -250,6 +274,22 @@ const styles = StyleSheet.create({
   bannerDivider: {
     width: 1,
     backgroundColor: colors.border,
+  },
+  // Shop-tab row under the two columns, hairline-separated.
+  bannerShopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  bannerShopValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.expense,
+    letterSpacing: -0.2,
   },
   bannerLabel: {
     fontSize: 12,

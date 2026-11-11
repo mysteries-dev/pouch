@@ -17,6 +17,12 @@ export type TransactionType = 'income' | 'expense';
  */
 export type DebtType = 'owed_to_you' | 'you_owe';
 
+/**
+ * Who a debt is with: a `person` (roommate, friend) or a `shop` (dokan /
+ * store) where purchases sit on a running tab ("baki").
+ */
+export type DebtEntityType = 'person' | 'shop';
+
 /** Lifecycle of a debt. Only `open` debts count towards `activeDebts`. */
 export type DebtStatus = 'open' | 'settled';
 
@@ -38,16 +44,21 @@ export interface Transaction {
   createdAt: string;
 }
 
-/** An IOU between the student and another person. */
+/** An IOU between the student and a person or a shop. */
 export interface Debt {
   /** Auto-incrementing primary key. */
   id: number;
-  /** Name of the counterparty, e.g. `"Alex"`. */
+  /** Counterparty's name — a person (`"Alex"`) or a shop (`"Bhai Bhai Dokan"`). */
   personName: string;
   /** Positive magnitude of the money lent or borrowed. */
   amount: number;
   /** Who owes whom (see {@link DebtType}). */
   type: DebtType;
+  /**
+   * Whether the counterparty is a person or a shop (store credit /
+   * baki tab); see {@link DebtEntityType}. Legacy rows are `'person'`.
+   */
+  entityType: DebtEntityType;
   /** Whether the debt is still outstanding. */
   status: DebtStatus;
   /** ISO-8601 timestamp of when the debt was recorded (UTC). */
@@ -77,6 +88,7 @@ export interface DebtRow {
   person_name: string;
   amount: number;
   type: DebtType;
+  entity_type: DebtEntityType;
   status: DebtStatus;
   created_at: string;
   settled_at: string | null;
