@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.brand,
+    color: colors.text,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -660,22 +660,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.accent,
   },
+  // Flat disabled state: fade the whole button instead of swapping to a
+  // dark fill the dark ink could no longer be read against.
   exportDisabled: {
-    backgroundColor: colors.border,
+    opacity: 0.45,
   },
   exportPressed: {
     opacity: 0.85,
   },
   exportGlyph: {
     fontSize: 15,
-    color: colors.onAccent,
+    color: colors.onBright,
   },
   exportLabel: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.onAccent,
+    color: colors.onBright,
   },
   exportHint: {
     marginTop: spacing.sm,

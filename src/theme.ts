@@ -7,41 +7,49 @@
  */
 
 /**
- * App-wide palette: cozy minimalist flat design. Neutrals carry a faint
- * warm-green cast so the screen feels calm, `brand` (the app's forest
- * green, matching the icon background) anchors every primary/selected
- * control, and the income/expense pair stays strictly semantic — money
- * in vs. money out — never decorative. Kept deliberately small.
+ * App-wide palette: cozy minimalist **dark flat** design. The background
+ * is a deep matte charcoal-green (never pure black — no harsh glare or
+ * contrast clipping), cards lift one notch to slate-moss, and every
+ * section is separated by crisp 1px hairlines instead of shadows. The
+ * sage-emerald `accent` anchors primary actions, the active tab and
+ * positive/receivable highlights; `brand` (the forest green from the app
+ * icon) holds selected badges/containers; the income/expense pair stays
+ * strictly semantic — money in vs. money out — in muted, high-contrast
+ * tones. Kept deliberately small.
  */
 export const colors = {
-  /** Screen background — soft warm neutral. */
-  background: '#F5F6F2',
-  /** Flat surfaces: cards, rows, sheets. */
-  surface: '#FFFFFF',
-  /** Primary text — deep charcoal with a green cast. */
-  text: '#1A211C',
-  /** Secondary / supporting text. */
-  textMuted: '#6B746C',
+  /** Screen background — deep matte charcoal-green. */
+  background: '#111512',
+  /** Flat surfaces: cards, rows, sheets — lifted slate-moss. */
+  surface: '#191F1A',
+  /** Primary text — soft warm off-white. */
+  text: '#F1F4F1',
+  /** Secondary / supporting text — muted sage-gray. */
+  textMuted: '#9AA69B',
   /** Hairlines, card borders, input outlines — the only depth cue. */
-  border: '#E4E7E1',
-  /** Brand / primary accent: selected states, primary buttons, active tab. */
+  border: '#273028',
+  /** Brand forest green: selected badges and dark containers. */
   brand: '#2E3B2B',
-  /** Money in and positive balances. */
-  income: '#16A34A',
-  /** Soft tint behind income indicators. */
-  incomeSoft: '#E9F6EF',
-  /** Expenses, liabilities and settle actions. */
-  expense: '#EF4444',
-  /** Soft tint behind expense indicators. */
-  expenseSoft: '#FDECEC',
+  /** Sage-emerald: primary buttons, active tab, positive highlights. */
+  accent: '#7BA675',
+  /** Cash-in and receivables ("they owe you") — semantic sage. */
+  income: '#7BA675',
+  /** Subtle dark tint behind income indicators. */
+  incomeSoft: '#1D2B1E',
+  /** Expenses, liabilities and settle actions — warm terracotta. */
+  expense: '#E07A6B',
+  /** Subtle dark tint behind expense indicators. */
+  expenseSoft: '#2B1D1B',
   /** Neutral fill for chips, inputs and pressed states. */
-  chip: '#EFF1EC',
-  /** Selected chip — brand fill, high contrast against `surface`. */
+  chip: '#202721',
+  /** Selected chip — brand container; the off-white label signals it. */
   chipActive: '#2E3B2B',
-  /** Scrim behind modal sheets. */
-  backdrop: 'rgba(26, 33, 28, 0.45)',
-  /** Text on top of brand/income/expense fills. */
-  onAccent: '#FFFFFF',
+  /** Scrim behind modal sheets — near-black green, never pure black. */
+  backdrop: 'rgba(4, 6, 5, 0.62)',
+  /** Text on top of brand/dark fills (selected pills, toggles). */
+  onAccent: '#F1F4F1',
+  /** Ink on top of bright sage/terracotta fills (buttons, toggles). */
+  onBright: '#111512',
 } as const;
 
 /** 4-pt spacing scale. */

@@ -49,7 +49,7 @@ export default function HomeScreen() {
 
       <BalanceCard />
 
-      {/* Two primary actions, semantic green for money in, red for
+      {/* Two primary actions, sage for money in, terracotta for
           expenses — the fill always follows the direction of money. */}
       <View style={styles.actions}>
         <Pressable
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.brand,
+    color: colors.text,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -154,7 +154,8 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.onAccent,
+    // Dark ink on the bright sage / terracotta fills.
+    color: colors.onBright,
   },
   errorBanner: {
     backgroundColor: colors.expenseSoft,

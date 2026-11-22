@@ -302,7 +302,10 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
                       <Text
                         style={[
                           styles.toggleLabel,
-                          isActive && styles.toggleLabelActive,
+                          // Bright sage/terracotta fill → dark ink (the
+                          // entity toggle above keeps the light ink on
+                          // its dark brand container).
+                          isActive && styles.toggleLabelOnFill,
                         ]}
                       >
                         {option.label}
@@ -463,6 +466,8 @@ const styles = StyleSheet.create({
   toggle: {
     flexDirection: 'row',
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.pill,
     padding: spacing.xs,
   },
@@ -487,7 +492,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   toggleLabelActive: {
+    // Light ink on the dark brand container (entity selection).
     color: colors.onAccent,
+  },
+  // Direction selections fill with bright sage/terracotta, so they take
+  // dark ink instead.
+  toggleLabelOnFill: {
+    color: colors.onBright,
   },
   formError: {
     fontSize: 13,
@@ -518,12 +529,12 @@ const styles = StyleSheet.create({
   submitLabel: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.onAccent,
+    color: colors.onBright,
   },
   submitAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.onAccent,
+    color: colors.onBright,
     opacity: 0.85,
   },
 });

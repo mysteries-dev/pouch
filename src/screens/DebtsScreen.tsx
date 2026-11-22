@@ -192,7 +192,7 @@ export default function DebtsScreen() {
           value={showSettled}
           onValueChange={setShowSettled}
           trackColor={{ false: colors.border, true: colors.income }}
-          thumbColor={colors.surface}
+          thumbColor={colors.text}
           accessibilityLabel="Show settled debts"
         />
       </View>
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.brand,
+    color: colors.text,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -386,12 +386,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.lg,
     bottom: spacing.lg,
-    backgroundColor: colors.brand,
+    // Sage primary button — flat, no drop shadow; the bright pill on the
+    // deep background already separates it from the list.
+    backgroundColor: colors.accent,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
-    // Flat: no drop shadow — the dark brand pill against the soft
-    // background already separates it from the list.
   },
   fabPressed: {
     opacity: 0.85,
@@ -399,6 +399,6 @@ const styles = StyleSheet.create({
   fabLabel: {
     fontSize: 15,
     fontWeight: '800',
-    color: colors.onAccent,
+    color: colors.onBright,
   },
 });

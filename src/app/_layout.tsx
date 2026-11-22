@@ -48,14 +48,14 @@ export default function RootLayout() {
 
   return (
     <>
-      {/* Dark status-bar content: every screen has a light background. */}
-      <StatusBar style="dark" />
+      {/* Light status-bar content: every screen has a dark background. */}
+      <StatusBar style="light" />
 
       <Tabs
         screenOptions={{
           headerShown: false,
-          // Brand green marks the focused tab; muted text for the rest.
-          tabBarActiveTintColor: colors.brand,
+          // Sage emerald marks the focused tab; muted text for the rest.
+          tabBarActiveTintColor: colors.accent,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabBarLabel,

@@ -391,6 +391,8 @@ const styles = StyleSheet.create({
   toggle: {
     flexDirection: 'row',
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.pill,
     padding: spacing.xs,
     marginBottom: spacing.lg,
@@ -417,7 +419,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   toggleLabelActive: {
-    color: colors.onAccent,
+    // Dark ink on the bright sage / terracotta selection fills.
+    color: colors.onBright,
   },
   amountBox: {
     flexDirection: 'row',
@@ -511,12 +514,12 @@ const styles = StyleSheet.create({
   submitLabel: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.onAccent,
+    color: colors.onBright,
   },
   submitAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.onAccent,
+    color: colors.onBright,
     opacity: 0.85,
   },
 });
