@@ -24,6 +24,31 @@
 
 ---
 
+## App Overview
+
+**Pouch** is an offline-first personal-finance tracker for students: log money in three seconds, keep honest person- and shop-level IOUs, and audit the month — all in a cozy **dark flat** interface, stored entirely on-device in SQLite with no account and no cloud.
+
+- **Cozy dark flat mode** — a glare-free charcoal-green background, matte slate-moss surfaces defined by crisp `1px` hairlines instead of drop shadows, sage-emerald for money in / receivables and warm terracotta for expenses / liabilities, with light status-bar icons to match.
+- **Independent person & shop (`Dokan`) credit** — track IOUs with roommates and friends *and* running tabs at the local shop (baki / nasta taken on credit). Every entry keeps its own bucket: what you owe people, what you owe shops, and what is owed to you never net against each other.
+- **Settlement balance rules** — lending or advancing cash to a shop drops your balance immediately; borrowing and shop tabs only touch it when you **Settle Up** / **Pay Tab**, and every IOU settles on its own.
+- **Clear All Data** — a guarded reset in the Summary tab wipes every transaction, debt and shop tab from SQLite after a confirmation dialog, returning the app to a fresh-install state.
+
+### Screenshots
+
+Drop real captures into `./assets/screenshots/` using the file names below and they render in place — no other edit needed. A demo GIF works too.
+
+| Home | Debts — Persons & `Dokan` | Summary |
+| :---: | :---: | :---: |
+| ![Home screen](./assets/screenshots/home.png) | ![Debts screen — persons and Dokan tabs](./assets/screenshots/debts.png) | ![Summary screen](./assets/screenshots/summary.png) |
+
+<sub>Planned files: `home.png` (balance card, 3-second logger, day-grouped feed) · `debts.png` (person and shop entries, filter pills, Settle Up) · `summary.png` (monthly audit, CSV export, Clear All Data) · optionally `demo.gif` for the gallery.</sub>
+
+### 🌐 Live Web Preview
+
+> **Placeholder** — a hosted web build link goes here once one is published (for example `https://mysteries-dev.github.io/pouch/`). Until then, run it locally with `npm run web`.
+
+---
+
 ## Overview
 
 Pouch is a **micro-finance tracker built for students**, where money moves in unpredictable bursts rather than neat monthly cycles.
