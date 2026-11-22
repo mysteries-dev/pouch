@@ -90,15 +90,10 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
+    // Flat definition: a crisp hairline border instead of a drop shadow.
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-    // Soft elevation; `elevation` is the Android equivalent of the shadow props.
-    shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 2,
   },
   label: {
     fontSize: 12,
@@ -124,7 +119,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   divider: {
-    height: StyleSheet.hairlineWidth,
+    height: 1,
     backgroundColor: colors.border,
     marginVertical: spacing.md,
   },

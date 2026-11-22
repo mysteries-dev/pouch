@@ -49,7 +49,8 @@ export default function HomeScreen() {
 
       <BalanceCard />
 
-      {/* Two primary actions, green for money in, accent red for expenses. */}
+      {/* Two primary actions, semantic green for money in, red for
+          expenses — the fill always follows the direction of money. */}
       <View style={styles.actions}>
         <Pressable
           onPress={() => openLogger('income')}
@@ -82,7 +83,10 @@ export default function HomeScreen() {
       {error !== null ? (
         <Pressable
           onPress={clearError}
-          style={styles.errorBanner}
+          style={({ pressed }) => [
+            styles.errorBanner,
+            pressed && styles.errorPressed,
+          ]}
           accessibilityRole="button"
           accessibilityLabel="Dismiss error"
         >
@@ -117,7 +121,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.brand,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -154,10 +158,15 @@ const styles = StyleSheet.create({
   },
   errorBanner: {
     backgroundColor: colors.expenseSoft,
+    borderWidth: 1,
+    borderColor: colors.expense,
     borderRadius: radius.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.sm,
+  },
+  errorPressed: {
+    opacity: 0.75,
   },
   errorText: {
     fontSize: 13,

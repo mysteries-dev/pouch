@@ -6,33 +6,41 @@
  * single-file change. Pure data: no React, no native imports.
  */
 
-/** App-wide palette. Kept deliberately small for a calm, minimal look. */
+/**
+ * App-wide palette: cozy minimalist flat design. Neutrals carry a faint
+ * warm-green cast so the screen feels calm, `brand` (the app's forest
+ * green, matching the icon background) anchors every primary/selected
+ * control, and the income/expense pair stays strictly semantic — money
+ * in vs. money out — never decorative. Kept deliberately small.
+ */
 export const colors = {
-  /** Screen background. */
-  background: '#F4F6F8',
-  /** Raised surfaces: cards, rows, sheets. */
+  /** Screen background — soft warm neutral. */
+  background: '#F5F6F2',
+  /** Flat surfaces: cards, rows, sheets. */
   surface: '#FFFFFF',
-  /** Primary text. */
-  text: '#111827',
+  /** Primary text — deep charcoal with a green cast. */
+  text: '#1A211C',
   /** Secondary / supporting text. */
-  textMuted: '#6B7280',
-  /** Hairlines, card borders, chip outlines. */
-  border: '#E5E7EB',
+  textMuted: '#6B746C',
+  /** Hairlines, card borders, input outlines — the only depth cue. */
+  border: '#E4E7E1',
+  /** Brand / primary accent: selected states, primary buttons, active tab. */
+  brand: '#2E3B2B',
   /** Money in and positive balances. */
   income: '#16A34A',
   /** Soft tint behind income indicators. */
-  incomeSoft: '#E8F7EF',
-  /** Expenses and negative balances — Pouch's accent color. */
+  incomeSoft: '#E9F6EF',
+  /** Expenses, liabilities and settle actions. */
   expense: '#EF4444',
   /** Soft tint behind expense indicators. */
   expenseSoft: '#FDECEC',
   /** Neutral fill for chips, inputs and pressed states. */
-  chip: '#F3F4F6',
-  /** Selected chip (high contrast against `surface`). */
-  chipActive: '#111827',
+  chip: '#EFF1EC',
+  /** Selected chip — brand fill, high contrast against `surface`. */
+  chipActive: '#2E3B2B',
   /** Scrim behind modal sheets. */
-  backdrop: 'rgba(17, 24, 39, 0.45)',
-  /** Text on top of income/expense fills. */
+  backdrop: 'rgba(26, 33, 28, 0.45)',
+  /** Text on top of brand/income/expense fills. */
   onAccent: '#FFFFFF',
 } as const;
 

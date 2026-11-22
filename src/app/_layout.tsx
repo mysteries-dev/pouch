@@ -54,7 +54,8 @@ export default function RootLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
-          tabBarActiveTintColor: colors.text,
+          // Brand green marks the focused tab; muted text for the rest.
+          tabBarActiveTintColor: colors.brand,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarStyle: styles.tabBar,
           tabBarLabelStyle: styles.tabBarLabel,
@@ -95,7 +96,13 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: colors.surface,
+    // Crisp 1px rule instead of the default hairline.
+    borderTopWidth: 1,
     borderTopColor: colors.border,
+    // expo-router's tab bar defaults to `elevation: 8` on Android; this
+    // style is applied after the built-in one, so zeroing it removes the
+    // shadow entirely — depth here comes from the border alone.
+    elevation: 0,
   },
   tabBarLabel: {
     fontSize: 11,

@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.brand,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.text,
+    backgroundColor: colors.brand,
   },
   exportDisabled: {
     backgroundColor: colors.border,
@@ -698,7 +698,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
   },
   // Red outline, not a solid fill: reads as destructive and never
-  // competes with the solid export button above it.
+  // competes with the solid export button above it. A crisp 1px border
+  // keeps it flat while still reading as a distinct action.
   clearButton: {
     minHeight: 54,
     flexDirection: 'row',
@@ -706,7 +707,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.expense,
     backgroundColor: colors.surface,
   },

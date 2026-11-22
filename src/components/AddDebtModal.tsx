@@ -182,7 +182,10 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
               <Pressable
                 onPress={onClose}
                 hitSlop={12}
-                style={styles.closeButton}
+                style={({ pressed }) => [
+                  styles.closeButton,
+                  pressed && styles.closePressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Close debt form"
               >
@@ -375,6 +378,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
+    // Crisp hairline along the sheet's top edge defines it against the
+    // backdrop — no shadow needed.
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     maxHeight: '88%',
@@ -398,6 +405,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xs,
   },
+  closePressed: {
+    opacity: 0.6,
+  },
   closeGlyph: {
     fontSize: 16,
     color: colors.textMuted,
@@ -416,6 +426,8 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -427,6 +439,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
@@ -459,10 +473,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Entity toggle uses a neutral dark fill — income/expense colours are
+  // Entity toggle uses the brand fill — income/expense colours are
   // reserved for money direction.
   toggleButtonActive: {
-    backgroundColor: colors.text,
+    backgroundColor: colors.brand,
   },
   togglePressed: {
     opacity: 0.85,

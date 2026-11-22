@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.brand,
     letterSpacing: -0.5,
   },
   tagline: {
@@ -386,16 +386,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.lg,
     bottom: spacing.lg,
-    backgroundColor: colors.text,
+    backgroundColor: colors.brand,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
-    // Lift the pill off the list so it reads as floating.
-    shadowColor: '#111827',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 4,
+    // Flat: no drop shadow — the dark brand pill against the soft
+    // background already separates it from the list.
   },
   fabPressed: {
     opacity: 0.85,
