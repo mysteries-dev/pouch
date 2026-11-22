@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import {
   addDebtWithMovement as insertDebtWithMovement,
   addTransaction as insertTransaction,
+  clearAllData as wipeRecords,
   getDebts,
   getTransactions,
   settleDebtWithMovement as insertSettlement,
@@ -101,6 +102,14 @@ export interface FinanceState {
    * the first time for a borrow or shop tab.
    */
   settleDebt: (debtId: number) => Promise<void>;
+  /**
+   * Wipes every transaction and debt from SQLite, then resets all
+   * derived state (balances, totals, debts, shop tabs) to the same
+   * values the store starts with. Resolves to `null` on success, or to
+   * a displayable error message when the wipe failed — nothing throws
+   * at the caller, matching the other actions.
+   */
+  clearAllData: () => Promise<string | null>;
   /** Clears the current error message. */
   clearError: () => void;
 }
@@ -305,6 +314,30 @@ export const useFinanceStore = create<FinanceState>()((set) => ({
       });
     } catch (error) {
       set({ error: toMessage(error) });
+    }
+  },
+
+  /**
+   * Erases the ledger and every debt in one SQLite transaction, then
+   * zeroes the state by re-deriving from empty arrays — so the reset is
+   * identical to a fresh install by construction, and every screen
+   * (feed, balance, debts, summary) updates in the same tick.
+   */
+  clearAllData: async () => {
+    set({ error: null });
+    try {
+      await wipeRecords();
+      set({
+        transactions: [],
+        debts: [],
+        ...deriveTotals([]),
+        ...deriveDebtSummary([]),
+      });
+      return null;
+    } catch (error) {
+      const message = toMessage(error);
+      set({ error: message });
+      return message;
     }
   },
 

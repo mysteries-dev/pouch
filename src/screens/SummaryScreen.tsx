@@ -10,7 +10,9 @@
  *  - a roll-forward card listing IOUs and shop tabs that stay open past
  *    this month,
  *  - and **Export Month to CSV**, which writes the month to a local file
- *    and opens the OS share sheet.
+ *    and opens the OS share sheet,
+ *  - plus a guarded **Clear All Data** action that wipes every record
+ *    from SQLite after a confirmation prompt.
  *
  * Data flow is fully offline: SQLite → `fetchInitialData()` → Zustand →
  * this screen. The only async boundary is that initial load, so every
@@ -20,6 +22,7 @@
 
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -95,6 +98,13 @@ export default function SummaryScreen() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [exportFailed, setExportFailed] = useState(false);
 
+  // Store action that wipes SQLite and resets every derivation; resolves
+  // to `null` on success or a message to show when it failed.
+  const clearAllData = useFinanceStore((state) => state.clearAllData);
+
+  // Guards the destructive button against double-taps while the wipe runs.
+  const [isClearing, setIsClearing] = useState(false);
+
   const now = new Date();
   const selected = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
   const monthKey = monthKeyOf(selected);
@@ -165,6 +175,42 @@ export default function SummaryScreen() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  /** Wipes everything, then reports the outcome in a system alert. */
+  const runClearData = async (): Promise<void> => {
+    setIsClearing(true);
+    const failure = await clearAllData();
+    setIsClearing(false);
+    if (failure === null) {
+      Alert.alert(
+        'All data cleared',
+        'Your transactions, debts and shop tabs have been erased.',
+      );
+    } else {
+      Alert.alert('Could not clear data', failure);
+    }
+  };
+
+  /**
+   * Two-step safety: the system confirmation dialog stands between an
+   * accidental tap and the wipe — the destructive action only runs from
+   * the dialog's own "Clear Everything" button.
+   */
+  const confirmClearData = (): void => {
+    if (isClearing) return;
+    Alert.alert(
+      'Clear all data?',
+      'Every transaction, debt and shop tab on this device will be erased. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Everything',
+          style: 'destructive',
+          onPress: () => void runClearData(),
+        },
+      ],
+    );
   };
 
   return (
@@ -371,6 +417,31 @@ export default function SummaryScreen() {
             {exportMessage}
           </Text>
         ) : null}
+
+        {/* Destructive action — visually separated and confirmation-
+            gated so a stray tap can never erase records. */}
+        <View style={styles.dangerZone}>
+          <Pressable
+            onPress={confirmClearData}
+            disabled={isClearing}
+            style={({ pressed }) => [
+              styles.clearButton,
+              isClearing && styles.clearDisabled,
+              pressed && !isClearing && styles.clearPressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Clear all data"
+            accessibilityState={{ disabled: isClearing }}
+          >
+            <Text style={styles.clearGlyph}>⚠</Text>
+            <Text style={styles.clearLabel}>
+              {isClearing ? 'Clearing…' : 'Clear All Data'}
+            </Text>
+          </Pressable>
+          <Text style={styles.clearHint}>
+            Erases every transaction, debt and shop tab on this device.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -621,5 +692,44 @@ const styles = StyleSheet.create({
   },
   exportMessageError: {
     color: colors.expense,
+  },
+  /* ---------------------------------------------------------------- danger */
+  dangerZone: {
+    marginTop: spacing.xl,
+  },
+  // Red outline, not a solid fill: reads as destructive and never
+  // competes with the solid export button above it.
+  clearButton: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.expense,
+    backgroundColor: colors.surface,
+  },
+  clearDisabled: {
+    opacity: 0.5,
+  },
+  clearPressed: {
+    opacity: 0.75,
+  },
+  clearGlyph: {
+    fontSize: 15,
+    color: colors.expense,
+  },
+  clearLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.expense,
+  },
+  clearHint: {
+    marginTop: spacing.sm,
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    color: colors.textMuted,
   },
 });

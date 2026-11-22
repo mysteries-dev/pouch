@@ -333,3 +333,31 @@ export async function getDebts(): Promise<Debt[]> {
   );
   return rows.map(mapRowToDebt);
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                 Maintenance                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Erases every persisted record — all transactions and all debts — and
+ * rewinds the `AUTOINCREMENT` sequence, so the next insert starts from
+ * id 1 exactly like a fresh install. The schema itself is untouched and
+ * the migration in `client.ts` stays valid, so the app remains usable
+ * immediately afterwards.
+ *
+ * Runs in a single SQLite transaction: the wipe either happens in full
+ * or not at all, never half-erased.
+ *
+ * @throws If the delete fails; the transaction is rolled back.
+ */
+export async function clearAllData(): Promise<void> {
+  const db = await getDatabase();
+  await db.withTransactionAsync(async () => {
+    await db.execAsync(`
+      DELETE FROM transactions;
+      DELETE FROM debts;
+      DELETE FROM sqlite_sequence
+       WHERE name IN ('transactions', 'debts');
+    `);
+  });
+}
