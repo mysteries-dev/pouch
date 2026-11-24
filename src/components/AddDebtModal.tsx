@@ -105,9 +105,10 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
   // together. A borrow or shop tab books no balance movement until paid.
   const addDebt = useFinanceStore((state) => state.addDebt);
 
-  // Bottom inset so the sheet's Save row never sits under the system
-  // navigation area — the same pattern SummaryScreen uses (see
-  // `paddingBottom: insets.bottom + 96` there).
+  // Bottom safe-area inset, carried by the ScrollView's content so the
+  // Add Debt button clears the system navigation area and keeps scroll
+  // room above the keypad (insets.bottom + 16 — see the
+  // `contentContainerStyle` below).
   const insets = useSafeAreaInsets();
 
   const [personName, setPersonName] = useState('');
@@ -174,9 +175,7 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
           style={styles.sheetWrap}
           pointerEvents="box-none"
         >
-          <View
-            style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}
-          >
+          <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
               <View style={styles.handle} />
               <Pressable
@@ -198,7 +197,13 @@ export default function AddDebtModal({ visible, onClose }: AddDebtModalProps) {
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.sheetBody}
+              contentContainerStyle={[
+                styles.sheetBody,
+                // Safe-area + keyboard clearance: the button always has
+                // room below it, scrollable when the keypad squeezes
+                // the sheet.
+                { paddingBottom: insets.bottom + 16 },
+              ]}
             >
               {/* Entity type: person or shop (store credit / tab). */}
               <Text style={styles.fieldLabel}>Type</Text>
