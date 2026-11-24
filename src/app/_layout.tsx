@@ -2,8 +2,10 @@
  * Pouch — root layout (Expo Router).
  *
  * Owns the bottom tab navigator (Home / Debts / Summary) and boots the
- * offline store exactly once, before the first screen renders. `expo-router` wraps this
- * tree in its own `SafeAreaProvider`, so screens can use
+ * offline store exactly once, before the first screen renders. The whole
+ * tree sits inside `ThemeProvider`, and `ThemedRoot` reads it to keep the
+ * status bar and root canvas in step with the active mode. `expo-router`
+ * wraps this tree in its own `SafeAreaProvider`, so screens can use
  * `useSafeAreaInsets()` / `SafeAreaView` directly.
  *
  * Note: `Tabs` is imported from `expo-router/js-tabs` — the root export
@@ -13,8 +15,9 @@
 import { StatusBar } from 'expo-status-bar';
 import { Tabs } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
+import { ThemeProvider, useTheme } from '../../context/ThemeContext';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { colors } from '../theme';
 
@@ -46,10 +49,27 @@ export default function RootLayout() {
     void fetchInitialData();
   }, [fetchInitialData]);
 
+  // Everything below may call `useTheme()`.
   return (
-    <>
-      {/* Light status-bar content: every screen has a dark background. */}
-      <StatusBar style="light" />
+    <ThemeProvider>
+      <ThemedRoot />
+    </ThemeProvider>
+  );
+}
+
+/**
+ * The app tree, inside the provider: system chrome and the root canvas
+ * follow the active mode — light status-bar ink on the charcoal-green
+ * dark flat canvas, dark ink on the neo-brutalist cream.
+ */
+function ThemedRoot() {
+  const { mode, theme } = useTheme();
+
+  return (
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
+      {/* Status-bar ink tracks the mode: 'light' on darkFlat, 'dark' on
+          the neo-brutalist mode. */}
+      <StatusBar style={mode === 'darkFlat' ? 'light' : 'dark'} />
 
       <Tabs
         screenOptions={{
@@ -89,11 +109,15 @@ export default function RootLayout() {
           }}
         />
       </Tabs>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    // `backgroundColor` is applied inline from the active theme.
+  },
   tabBar: {
     backgroundColor: colors.surface,
     // Crisp 1px rule instead of the default hairline.
