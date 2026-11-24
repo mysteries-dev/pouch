@@ -1,3 +1,5 @@
+// cspell:ignore neubrutalism
+
 /**
  * Pouch — TransactionList.
  *
@@ -5,14 +7,24 @@
  * (`Today`, `Yesterday`, …) with a category icon and signed amount.
  * Presentational on purpose — it takes `transactions` as a prop, so the
  * Home Screen owns the store subscription and this stays easy to reuse.
+ *
+ * Fills, ink, borders and shadows follow the active `useTheme()`
+ * tokens. `darkFlat` reproduces the old feed exactly — every token
+ * equals the former constant, and the icon chip's two fill values (a
+ * soft tint and the chip wash, neither with a token) keep their flat
+ * constant behind `isFlat`. `neubrutalism` turns each row into a white
+ * slab — 2.5px solid black border, sharp 6px corners, hard 4x4 offset
+ * shadow — with the icon chip stamped in a bordered accent square.
+ * Props, grouping and formatting logic are untouched.
  */
 
 import { useMemo } from 'react';
 import { SectionList, StyleSheet, Text, View } from 'react-native';
 import type { SectionListRenderItemInfo } from 'react-native';
 
+import { useTheme } from '../../context/ThemeContext';
 import type { Transaction } from '../db/schema';
-import { colors, radius, spacing } from '../theme';
+import { colors, spacing } from '../theme';
 import {
   formatClockTime,
   formatDateHeader,
@@ -83,27 +95,72 @@ function groupByDay(transactions: Transaction[]): TransactionSection[] {
 }
 
 /**
- * Module-level renderers: stable references, so `SectionList` (a
- * `PureComponent`) never re-renders solely because a callback identity
- * changed on the parent.
+ * One feed row. A real component (not a bare render callback) so the
+ * theme context reaches it directly — context updates re-render this
+ * instance even while `SectionList` itself stays pure.
  */
-function renderRow({
+function TransactionRow({
   item,
 }: SectionListRenderItemInfo<Transaction, TransactionSection>) {
+  const { mode, theme } = useTheme();
+  const isFlat = mode === 'darkFlat';
   const isIncome = item.type === 'income';
-  const iconBackground = isIncome ? colors.incomeSoft : colors.chip;
+
+  // Hard offset shadow: inert zeros in darkFlat, the paper-cut drop
+  // shadow in the neo-brutalist mode.
+  const hardShadow = {
+    shadowColor: theme.shadowColor,
+    shadowOffset: theme.shadowOffset,
+    shadowOpacity: theme.shadowOpacity,
+    shadowRadius: theme.shadowRadius,
+    elevation: theme.elevation,
+  };
+
+  // The 2.5px black outline the brutal mode puts on the slabs; inert
+  // (an empty spread) in flat, where the row keeps its 1px hairline.
+  const activeSlab = isFlat
+    ? {}
+    : { borderWidth: theme.borderWidth, borderColor: theme.borderColor };
+
+  // Row: surface + 1px hairline + the old `radius.md` (12 — the token
+  // mirrors it) in flat; white slab with the hard shadow in brutal.
+  const rowFrame = {
+    backgroundColor: theme.surface,
+    borderWidth: isFlat ? 1 : theme.borderWidth,
+    borderColor: theme.borderColor,
+    borderRadius: theme.borderRadius,
+    ...hardShadow,
+  };
+
+  // Icon chip: the soft income tint / neutral chip wash in flat (neither
+  // has a token, so both stay flat constants); in brutal it stamps as a
+  // bordered accent square — solid money-direction fill for income, the
+  // white surface for expense.
+  const iconFrame = {
+    backgroundColor: isFlat
+      ? isIncome
+        ? colors.incomeSoft
+        : colors.chip
+      : isIncome
+        ? theme.income
+        : theme.surface,
+    // Full circle in flat (half of the 40px chip), sharp in brutal.
+    borderRadius: isFlat ? 20 : theme.borderRadius,
+    ...activeSlab,
+    ...hardShadow,
+  };
 
   return (
-    <View style={styles.row}>
-      <View style={[styles.iconCircle, { backgroundColor: iconBackground }]}>
+    <View style={[styles.row, rowFrame]}>
+      <View style={[styles.iconCircle, iconFrame]}>
         <Text style={styles.icon}>{iconFor(item)}</Text>
       </View>
 
       <View style={styles.rowBody}>
-        <Text style={styles.category} numberOfLines={1}>
+        <Text style={[styles.category, { color: theme.text }]} numberOfLines={1}>
           {item.category}
         </Text>
-        <Text style={styles.meta} numberOfLines={1}>
+        <Text style={[styles.meta, { color: theme.textMuted }]} numberOfLines={1}>
           {buildMeta(item)}
         </Text>
       </View>
@@ -111,7 +168,7 @@ function renderRow({
       <Text
         style={[
           styles.amount,
-          { color: isIncome ? colors.income : colors.expense },
+          { color: isIncome ? theme.income : theme.expense },
         ]}
       >
         {isIncome ? '+' : '−'}
@@ -121,21 +178,55 @@ function renderRow({
   );
 }
 
+/**
+ * Module-level renderer: a stable reference, so `SectionList` (a
+ * `PureComponent`) never re-renders solely because a callback identity
+ * changed on the parent. Theming lives in `TransactionRow`, so this
+ * wrapper stays a pure element factory.
+ */
+function renderRow(
+  info: SectionListRenderItemInfo<Transaction, TransactionSection>,
+) {
+  return <TransactionRow {...info} />;
+}
+
+/** Day header component — consumes the theme in its own fiber. */
+function SectionHeader({ section }: { section: TransactionSection }) {
+  const { theme } = useTheme();
+  return (
+    <Text
+      style={[
+        styles.sectionHeader,
+        {
+          color: theme.textMuted,
+          backgroundColor: theme.background,
+        },
+      ]}
+    >
+      {section.title}
+    </Text>
+  );
+}
+
+/** Stable module-level wrapper — see `renderRow`. */
 function renderSectionHeader({
   section,
 }: {
   section: TransactionSection;
 }) {
-  return <Text style={styles.sectionHeader}>{section.title}</Text>;
+  return <SectionHeader section={section} />;
 }
 
 /** Friendly placeholder shown before the first entry exists. */
 function EmptyState() {
+  const { theme } = useTheme();
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyIcon}>🪙</Text>
-      <Text style={styles.emptyTitle}>Nothing logged yet</Text>
-      <Text style={styles.emptyText}>
+      <Text style={[styles.emptyTitle, { color: theme.text }]}>
+        Nothing logged yet
+      </Text>
+      <Text style={[styles.emptyText, { color: theme.textMuted }]}>
         Tap + Expense or + Money In to record your first entry.
       </Text>
     </View>
@@ -183,8 +274,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: colors.textMuted,
-    backgroundColor: colors.background,
+    // Ink + canvas arrive through the active theme (inline above).
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
@@ -192,17 +282,14 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    // Fill/border/radius/shadow arrive through `rowFrame`.
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    // `borderRadius` follows the mode (circle in flat, sharp in brutal).
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -217,16 +304,17 @@ const styles = StyleSheet.create({
   category: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
+    // `color` follows the active theme (inline above).
   },
   meta: {
     marginTop: 2,
     fontSize: 12,
-    color: colors.textMuted,
+    // `color` follows the active theme (inline above).
   },
   amount: {
     fontSize: 15,
     fontWeight: '700',
+    // `color` follows the direction accent token (inline above).
   },
   empty: {
     flex: 1,
@@ -241,13 +329,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    // `color` follows the active theme (inline above).
   },
   emptyText: {
     marginTop: spacing.xs,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',
-    color: colors.textMuted,
+    // `color` follows the active theme (inline above).
   },
 });
