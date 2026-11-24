@@ -49,6 +49,8 @@ on:
 # which requires write access to repository contents. Newer repositories
 # default the GITHUB_TOKEN to read-only, so this must be stated explicitly
 # or the release step fails with "Resource not accessible by integration".
+# The same scope authorises the README badge-sync step below to push its
+# github-actions[bot] commit back to `main`.
 permissions:
   contents: write
 
@@ -78,6 +80,70 @@ jobs:
       # auto-generated release notes are produced server-side by the API.
       - name: Check out repository
         uses: actions/checkout@v7
+
+      # ---------------------------------------------------------------------
+      # 1b. README badge sync
+      # ---------------------------------------------------------------------
+      # Tag runs keep the Download badge honest without a manual README
+      # bump: rewrite README.md's versioned strings (release asset URL +
+      # shields.io label) to this tag and push the commit straight back
+      # to `main` as github-actions[bot]. `permissions.contents: write`
+      # above authorises the push; actions/checkout's persisted
+      # credentials (its default) supply the token.
+      #
+      # Tag runs only — a workflow_dispatch ref_name is a branch, not a
+      # release version. The edit is made on main's tip rather than the
+      # detached tag, so the push is always a fast-forward even when
+      # main has moved on since the tag was cut, and the checkout is
+      # restored to the tagged commit before the step ends so prebuild,
+      # Gradle and the Release all still operate on the tag. When
+      # README.md already matches the tag the step exits without
+      # committing ("if README.md changed").
+      - name: Sync README badge to tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          # Read github.ref_name through env rather than interpolating it
+          # into the script body.
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Detach onto main's tip (usually the tagged commit itself).
+          git fetch origin main
+          git switch --detach FETCH_HEAD
+
+          # The two exact patterns README.md carries, rewritten to this
+          # tag. `|` delimiters keep refs containing `/` intact, and the
+          # digit-anchored version class leaves the `pouch-v<version>.apk`
+          # placeholder and the dependency-version badges alone:
+          #   .../releases/download/vX.Y.Z/pouch-vX.Y.Z.apk
+          #   shields.io/badge/Download-Pouch_vX.Y.Z_APK-...
+          sed -E -i \
+            -e "s|releases/download/v[0-9][-0-9A-Za-z.]*/pouch-v[0-9][-0-9A-Za-z.]*\.apk|releases/download/${REF_NAME}/pouch-${REF_NAME}.apk|g" \
+            -e "s|Download-Pouch_v[0-9][-0-9A-Za-z.]*_APK|Download-Pouch_${REF_NAME}_APK|g" \
+            README.md
+
+          if git diff --quiet -- README.md; then
+            echo "README.md already points at ${REF_NAME} — nothing to push."
+            git switch --detach "${GITHUB_SHA}"
+            exit 0
+          fi
+
+          git add README.md
+          git commit -m "docs: point Download APK badge at ${REF_NAME} release asset"
+          badge_commit="$(git rev-parse HEAD)"
+
+          # Back to the tagged snapshot first: the badge commit is pushed
+          # by object id, so nothing downstream depends on the working
+          # tree's ref.
+          git switch --detach "${GITHUB_SHA}"
+          git push origin "${badge_commit}:refs/heads/main"
+
+          echo "Pushed ${badge_commit} to main — README badge now points at ${REF_NAME}."
 
       # ---------------------------------------------------------------------
       # 2. Toolchain
