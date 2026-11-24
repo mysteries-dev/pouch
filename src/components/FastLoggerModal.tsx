@@ -1,3 +1,5 @@
+// cspell:ignore neubrutalism
+
 /**
  * Pouch — FastLoggerModal.
  *
@@ -11,6 +13,16 @@
  * The parent remounts it once per logging session (a changing `key`), which
  * is what gives every open a clean form: RN's `Modal` keeps its children
  * alive while hidden, so `useState` initializers only re-run on a remount.
+ *
+ * Fills, ink, borders, corners and shadows follow the active `useTheme()`
+ * tokens. `darkFlat` reproduces the old sheet exactly — every token
+ * equals the former constant, and the few values with no token (the
+ * scrim, the chip/chipActive fills, the pill radii, the 1px hairlines)
+ * keep their flat constant behind `isFlat`. `neubrutalism` turns the
+ * sheet, inputs, type toggle, category pills and submit button into
+ * white slabs: 2.5px solid black borders, sharp 6px corners and the hard
+ * 4x4 offset shadow. Form state, validation, keyboard handling and the
+ * submission path are untouched.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -28,6 +40,7 @@ import {
 import type { TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useTheme } from '../../context/ThemeContext';
 import type { TransactionType } from '../db/schema';
 import { useFinanceStore } from '../store/useFinanceStore';
 import { colors, radius, spacing } from '../theme';
@@ -131,8 +144,110 @@ export default function FastLoggerModal({
     onClose();
   };
 
+  // Active mode + tokens. `isFlat` gates only the values with no token:
+  // the scrim, the chip/chipActive fills and the pill radii the flat
+  // look is built from.
+  const { mode, theme } = useTheme();
+  const isFlat = mode === 'darkFlat';
+
   const categories = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-  const accentColor = type === 'expense' ? colors.expense : colors.income;
+
+  // Accent follows the selected tab: terracotta for expense, sage for
+  // money in (the brutal palette swaps in coral/teal).
+  const accentColor = type === 'expense' ? theme.expense : theme.income;
+
+  // Ink on the bright fills — the inverse of text-on-canvas: darkFlat's
+  // #111512 (the old `onBright`), the brutal mode's #111111 black ink
+  // (>= 6.5:1 on every fill in either palette).
+  const inkOnFill = isFlat ? theme.background : theme.text;
+
+  // Secondary ink: field labels, inactive pills, the glyph chrome.
+  const mutedInk = { color: theme.textMuted };
+
+  // Hard offset shadow: inert zeros in darkFlat, the paper-cut drop
+  // shadow in the neo-brutalist mode.
+  const hardShadow = {
+    shadowColor: theme.shadowColor,
+    shadowOffset: theme.shadowOffset,
+    shadowOpacity: theme.shadowOpacity,
+    shadowRadius: theme.shadowRadius,
+    elevation: theme.elevation,
+  };
+
+  // Corner radius for the pill rows: full round in flat, sharp in brutal.
+  const pillRadius = isFlat ? radius.pill : theme.borderRadius;
+
+  // The 2.5px black outline the brutal mode puts on the slab frames and
+  // the selected pills; inert (an empty spread) in flat.
+  const activeSlab = isFlat
+    ? {}
+    : { borderWidth: theme.borderWidth, borderColor: theme.borderColor };
+
+  // Sheet: flat keeps the rounded top and the crisp hairline against the
+  // backdrop; brutal flips to a white slab — sharp corners, thick solid
+  // border on every visible side, hard offset shadow.
+  const sheetFrame = isFlat
+    ? {
+        backgroundColor: theme.surface,
+        borderTopLeftRadius: radius.lg,
+        borderTopRightRadius: radius.lg,
+        borderTopWidth: 1,
+        borderTopColor: theme.borderColor,
+      }
+    : {
+        backgroundColor: theme.surface,
+        borderWidth: theme.borderWidth,
+        borderColor: theme.borderColor,
+        borderRadius: theme.borderRadius,
+        ...hardShadow,
+      };
+
+  // Inputs (amount box, tag field): chip fill + 1px hairline in flat —
+  // pixel-identical to before, `borderRadius` 12 equals the old
+  // `radius.md` — white slab in brutal.
+  const fieldFrame = {
+    backgroundColor: isFlat ? colors.chip : theme.surface,
+    borderWidth: isFlat ? 1 : theme.borderWidth,
+    borderColor: theme.borderColor,
+    borderRadius: theme.borderRadius,
+  };
+
+  // Type-toggle housing: the chip pill in flat, a sharp-cornered white
+  // slab — with the hard shadow — in brutal.
+  const toggleFrame = {
+    backgroundColor: isFlat ? colors.chip : theme.surface,
+    borderWidth: isFlat ? 1 : theme.borderWidth,
+    borderColor: theme.borderColor,
+    borderRadius: pillRadius,
+    ...hardShadow,
+  };
+
+  // Selected type tab: the bright money-direction fill in both modes,
+  // outlined by the slab in brutal (no border in flat, as before).
+  const expensePill = { backgroundColor: theme.expense, ...activeSlab };
+  const incomePill = { backgroundColor: theme.income, ...activeSlab };
+
+  // Category preset chips: chip fill + full round in flat (no border,
+  // inert shadow zeros); white slab with hard shadow in brutal, and the
+  // selected one stamps itself in the accent yellow.
+  const presetFrame = {
+    backgroundColor: isFlat ? colors.chip : theme.surface,
+    borderRadius: pillRadius,
+    ...activeSlab,
+    ...hardShadow,
+  };
+  const presetActivePill = {
+    backgroundColor: isFlat ? colors.chipActive : theme.accent,
+  };
+
+  // Single-tap save: accent fill with the old `radius.md` in flat (no
+  // border, inert shadow zeros), the outlined slab in brutal.
+  const submitFrame = {
+    backgroundColor: accentColor,
+    borderRadius: theme.borderRadius,
+    ...activeSlab,
+    ...hardShadow,
+  };
 
   return (
     <Modal
@@ -156,10 +271,17 @@ export default function FastLoggerModal({
           pointerEvents="box-none"
         >
           <View
-            style={[styles.sheet, { paddingBottom: spacing.xl + insets.bottom }]}
+            style={[
+              styles.sheet,
+              sheetFrame,
+              // Safe-area clearance for the action row (unchanged).
+              { paddingBottom: spacing.xl + insets.bottom },
+            ]}
           >
             <View style={styles.sheetHeader}>
-              <View style={styles.handle} />
+              <View
+                style={[styles.handle, { backgroundColor: theme.borderColor }]}
+              />
               <Pressable
                 onPress={onClose}
                 hitSlop={12}
@@ -170,7 +292,7 @@ export default function FastLoggerModal({
                 accessibilityRole="button"
                 accessibilityLabel="Close logger"
               >
-                <Text style={styles.closeGlyph}>✕</Text>
+                <Text style={[styles.closeGlyph, mutedInk]}>✕</Text>
               </Pressable>
             </View>
 
@@ -182,12 +304,13 @@ export default function FastLoggerModal({
               contentContainerStyle={styles.sheetBody}
             >
               {/* Expense / Money In toggle. */}
-              <View style={styles.toggle}>
+              <View style={[styles.toggle, toggleFrame]}>
                 <Pressable
                   onPress={() => handleTypeChange('expense')}
                   style={({ pressed }) => [
                     styles.toggleButton,
-                    type === 'expense' && styles.toggleExpenseActive,
+                    { borderRadius: pillRadius },
+                    type === 'expense' && expensePill,
                     pressed && styles.togglePressed,
                   ]}
                   accessibilityRole="button"
@@ -196,7 +319,9 @@ export default function FastLoggerModal({
                   <Text
                     style={[
                       styles.toggleLabel,
-                      type === 'expense' && styles.toggleLabelActive,
+                      mutedInk,
+                      // Dark ink on the bright terracotta selection fill.
+                      type === 'expense' && { color: inkOnFill },
                     ]}
                   >
                     Expense
@@ -207,7 +332,8 @@ export default function FastLoggerModal({
                   onPress={() => handleTypeChange('income')}
                   style={({ pressed }) => [
                     styles.toggleButton,
-                    type === 'income' && styles.toggleIncomeActive,
+                    { borderRadius: pillRadius },
+                    type === 'income' && incomePill,
                     pressed && styles.togglePressed,
                   ]}
                   accessibilityRole="button"
@@ -216,7 +342,9 @@ export default function FastLoggerModal({
                   <Text
                     style={[
                       styles.toggleLabel,
-                      type === 'income' && styles.toggleLabelActive,
+                      mutedInk,
+                      // Dark ink on the bright sage selection fill.
+                      type === 'income' && { color: inkOnFill },
                     ]}
                   >
                     Money In
@@ -225,26 +353,28 @@ export default function FastLoggerModal({
               </View>
 
               {/* Large amount field. */}
-              <View style={styles.amountBox}>
-                <Text style={styles.currencySymbol}>{CURRENCY}</Text>
+              <View style={[styles.amountBox, fieldFrame]}>
+                <Text style={[styles.currencySymbol, mutedInk]}>
+                  {CURRENCY}
+                </Text>
                 <TextInput
                   ref={amountInputRef}
                   value={amount}
                   onChangeText={(next) => setAmount(sanitizeAmountInput(next))}
                   placeholder="0"
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={theme.textMuted}
                   keyboardType="decimal-pad"
                   returnKeyType="done"
                   maxLength={10}
                   selectionColor={accentColor}
                   onSubmitEditing={handleSubmit}
-                  style={styles.amountInput}
+                  style={[styles.amountInput, { color: theme.text }]}
                   accessibilityLabel="Amount"
                 />
               </View>
 
               {/* Quick-preset categories. */}
-              <Text style={styles.fieldLabel}>Category</Text>
+              <Text style={[styles.fieldLabel, mutedInk]}>Category</Text>
               <View style={styles.presetRow}>
                 {categories.map((preset) => {
                   const isActive = preset === category;
@@ -257,7 +387,8 @@ export default function FastLoggerModal({
                       }}
                       style={({ pressed }) => [
                         styles.preset,
-                        isActive && styles.presetActive,
+                        presetFrame,
+                        isActive && presetActivePill,
                         pressed && styles.presetPressed,
                       ]}
                       accessibilityRole="button"
@@ -266,7 +397,10 @@ export default function FastLoggerModal({
                       <Text
                         style={[
                           styles.presetLabel,
-                          isActive && styles.presetLabelActive,
+                          mutedInk,
+                          // Light ink on the dark brand chip in flat;
+                          // black ink on the accent stamp in brutal.
+                          isActive && { color: theme.text },
                         ]}
                       >
                         {preset}
@@ -277,23 +411,25 @@ export default function FastLoggerModal({
               </View>
 
               {/* Optional tag, e.g. #ApartmentMove */}
-              <Text style={styles.fieldLabel}>Tag (optional)</Text>
+              <Text style={[styles.fieldLabel, mutedInk]}>Tag (optional)</Text>
               <TextInput
                 value={tag}
                 onChangeText={setTag}
                 placeholder="#ApartmentMove"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={theme.textMuted}
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={40}
                 selectionColor={accentColor}
                 returnKeyType="done"
-                style={styles.tagInput}
+                style={[styles.tagInput, fieldFrame, { color: theme.text }]}
                 accessibilityLabel="Tag"
               />
 
               {formError !== null ? (
-                <Text style={styles.formError}>{formError}</Text>
+                <Text style={[styles.formError, { color: theme.expense }]}>
+                  {formError}
+                </Text>
               ) : null}
 
               {/* Single-tap save. */}
@@ -301,17 +437,17 @@ export default function FastLoggerModal({
                 onPress={handleSubmit}
                 style={({ pressed }) => [
                   styles.submitButton,
-                  { backgroundColor: accentColor },
+                  submitFrame,
                   pressed && styles.submitPressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={`Add ${type === 'expense' ? 'expense' : 'money in'}`}
               >
-                <Text style={styles.submitLabel}>
+                <Text style={[styles.submitLabel, { color: inkOnFill }]}>
                   {type === 'expense' ? 'Add Expense' : 'Add Money In'}
                 </Text>
                 {Number.parseFloat(amount) > 0 ? (
-                  <Text style={styles.submitAmount}>
+                  <Text style={[styles.submitAmount, { color: inkOnFill }]}>
                     {formatMoney(roundMoney(Number.parseFloat(amount)))}
                   </Text>
                 ) : null}
@@ -330,7 +466,9 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     // Full-bleed scrim behind the sheet (explicit props: `absoluteFillObject`
-    // is not part of the RN 0.88 type surface).
+    // is not part of the RN 0.88 type surface). No `backdrop` token exists,
+    // and the translucent dim reads neutral over both canvases, so it stays
+    // the flat constant in both modes.
     position: 'absolute',
     top: 0,
     right: 0,
@@ -348,13 +486,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    // Crisp hairline along the sheet's top edge defines it against the
-    // backdrop — no shadow needed.
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    // Fill, corners, hairline/slab border and shadow arrive through
+    // `sheetFrame` (the active theme).
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     maxHeight: '88%',
@@ -368,7 +501,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.border,
+    // `backgroundColor` follows the active theme (inline above).
   },
   closeButton: {
     position: 'absolute',
@@ -383,32 +516,22 @@ const styles = StyleSheet.create({
   },
   closeGlyph: {
     fontSize: 16,
-    color: colors.textMuted,
+    // `color` follows the active theme.
   },
   sheetBody: {
     paddingTop: spacing.sm,
   },
   toggle: {
     flexDirection: 'row',
-    backgroundColor: colors.chip,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    padding: spacing.xs,
+    // Fill/border/radius/shadow arrive through `toggleFrame`.
     marginBottom: spacing.lg,
   },
   toggleButton: {
     flex: 1,
     paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
+    // `borderRadius` follows `pillRadius` (inline above).
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  toggleExpenseActive: {
-    backgroundColor: colors.expense,
-  },
-  toggleIncomeActive: {
-    backgroundColor: colors.income,
   },
   togglePressed: {
     opacity: 0.85,
@@ -416,20 +539,13 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.textMuted,
-  },
-  toggleLabelActive: {
-    // Dark ink on the bright sage / terracotta selection fills.
-    color: colors.onBright,
+    // Base ink follows the theme; the selected tab overrides it above.
   },
   amountBox: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.chip,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    // Fill/border/radius arrive through `fieldFrame`.
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.lg,
@@ -437,7 +553,7 @@ const styles = StyleSheet.create({
   currencySymbol: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.textMuted,
+    // `color` follows the active theme.
     marginRight: spacing.xs,
   },
   amountInput: {
@@ -445,7 +561,7 @@ const styles = StyleSheet.create({
     padding: 0,
     fontSize: 44,
     fontWeight: '800',
-    color: colors.text,
+    // `color` follows the active theme.
     textAlign: 'center',
     letterSpacing: -1,
   },
@@ -454,7 +570,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    color: colors.textMuted,
+    // `color` follows the active theme.
     marginBottom: spacing.sm,
   },
   presetRow: {
@@ -466,11 +582,7 @@ const styles = StyleSheet.create({
   preset: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.chip,
-  },
-  presetActive: {
-    backgroundColor: colors.chipActive,
+    // Fill/radius/border/shadow arrive through `presetFrame`.
   },
   presetPressed: {
     opacity: 0.7,
@@ -478,31 +590,24 @@ const styles = StyleSheet.create({
   presetLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.textMuted,
-  },
-  presetLabelActive: {
-    color: colors.onAccent,
+    // Base ink follows the theme; the selected preset overrides it above.
   },
   tagInput: {
-    backgroundColor: colors.chip,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    // Fill/border/radius arrive through `fieldFrame`; ink follows the theme.
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: 15,
-    color: colors.text,
     marginBottom: spacing.md,
   },
   formError: {
     fontSize: 13,
-    color: colors.expense,
+    // `color` follows the active theme (inline above).
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   submitButton: {
     minHeight: 54,
-    borderRadius: radius.md,
+    // Fill/radius/border/shadow arrive through `submitFrame`.
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -514,12 +619,12 @@ const styles = StyleSheet.create({
   submitLabel: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.onBright,
+    // Ink follows `inkOnFill` (inline above).
   },
   submitAmount: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.onBright,
+    // Ink follows `inkOnFill` (inline above).
     opacity: 0.85,
   },
 });
